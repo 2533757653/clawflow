@@ -169,11 +169,24 @@ ruff check src/
 
 ## Roadmap
 
+### ✅ Completed (v0.1.0)
+- [x] Message bus (in-memory)
+- [x] Self-bootstrapping agents
+- [x] HTTP API
+- [x] Web UI (workflow visualization)
+- [x] Template marketplace (5 pre-built workflows)
+
+### 🚧 In Progress (v0.2.0)
 - [ ] Redis message bus (production-ready)
-- [ ] WebSocket support (real-time updates)
-- [ ] Web UI (workflow visualization)
-- [ ] Template marketplace (pre-built workflows)
+- [ ] WebSocket real-time updates
+- [ ] Complete workflow execution logic
+- [ ] Agent message handling
+
+### 📋 Planned (v0.3.0+)
 - [ ] Distributed deployment (Kubernetes)
+- [ ] Template marketplace (community contributions)
+- [ ] Workflow editor (drag-and-drop)
+- [ ] Advanced monitoring (Prometheus/Grafana)
 
 ## License
 

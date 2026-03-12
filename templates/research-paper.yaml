@@ -1,0 +1,71 @@
+# Research Paper Workflow
+# 研究论文写作工作流
+
+name: research-paper
+description: "从选题到发表的论文写作流程"
+version: "1.0"
+
+agents:
+  router:
+    type: Router
+    description: "接收研究主题"
+  
+  planner:
+    type: Planner
+    description: "规划研究步骤"
+  
+  data_worker:
+    type: Worker
+    description: "文献检索、数据收集"
+    capabilities: ["web_search", "web_fetch"]
+  
+  code_worker:
+    type: Worker
+    description: "实验代码、数据处理"
+    capabilities: ["exec", "read/write"]
+  
+  doc_worker:
+    type: Worker
+    description: "论文撰写、格式调整"
+    capabilities: ["read/write", "web_search"]
+  
+  review_worker:
+    type: Worker
+    description: "论文审查、引用检查"
+    capabilities: ["read", "web_search"]
+
+workflow:
+  entry: router
+  steps:
+    - from: router
+      condition: valid_requirement
+      to: planner
+    
+    - from: planner
+      condition: plan_created
+      to: data_worker
+    
+    - from: data_worker
+      condition: execution_complete
+      to: code_worker
+    
+    - from: code_worker
+      condition: execution_complete
+      to: doc_worker
+    
+    - from: doc_worker
+      condition: execution_complete
+      to: review_worker
+    
+    - from: review_worker
+      condition: approval_passed
+      to: router
+
+# 示例输入
+example_input: |
+  撰写一篇关于深度学习的论文：
+  - 主题：Transformer 在时间序列预测中的应用
+  - 数据集：电力负荷数据、股票价格
+  - 对比方法：LSTM、GRU、ARIMA
+  - 目标会议：NeurIPS / ICML
+  - 字数：8000-10000 字

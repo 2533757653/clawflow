@@ -36,6 +36,11 @@ dev = [
 openclaw = [
     "openclaw>=1.0",
 ]
+webui = [
+    "flask>=2.3.0",
+    "flask-socketio>=5.3.0",
+    "requests>=2.31.0",
+]
 
 [project.scripts]
 clawflow = "clawflow.cli:main"

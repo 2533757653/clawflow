@@ -1,0 +1,69 @@
+# Self-Update Workflow
+# ClawFlow 自更新工作流
+
+name: self-update
+description: "ClawFlow 框架自举更新"
+version: "1.0"
+
+agents:
+  router:
+    type: Router
+    description: "检测更新请求"
+  
+  planner:
+    type: Planner
+    description: "制定更新计划"
+  
+  code_worker:
+    type: Worker
+    description: "拉取并应用代码更新"
+    capabilities: ["exec", "read/write"]
+  
+  review_worker:
+    type: Worker
+    description: "验证更新完整性"
+    capabilities: ["exec"]
+  
+  deploy_worker:
+    type: Worker
+    description: "重新加载框架"
+    capabilities: ["exec", "process"]
+
+workflow:
+  entry: router
+  steps:
+    - from: router
+      condition: valid_requirement
+      to: planner
+    
+    - from: planner
+      condition: plan_created
+      to: code_worker
+    
+    - from: code_worker
+      condition: execution_complete
+      to: review_worker
+    
+    - from: review_worker
+      condition: approval_passed
+      to: deploy_worker
+    
+    - from: deploy_worker
+      condition: execution_complete
+      to: router
+
+# 元数据
+self_update:
+  enabled: true
+  repo: "https://github.com/2533757653/clawflow"
+  version_file: "src/clawflow/__init__.py"
+  backup_dir: ".clawflow/backups"
+  auto_rollback: true
+
+# 示例输入
+example_input: |
+  检查并更新 ClawFlow 到最新版本
+  - 当前版本：0.1.0
+  - 目标版本：latest
+  - 备份当前版本：是
+  - 自动回滚：如果更新失败

@@ -138,5 +138,18 @@ def status():
     ))
 
 
+@main.command()
+@click.option('--host', default='0.0.0.0', help='Host to bind')
+@click.option('--port', type=int, default=8766, help='Port to bind')
+def webui(host: str, port: int):
+    """启动 Web UI"""
+    try:
+        from clawflow.webui.app import socketio, app
+        console.print(f"[blue]启动 Web UI：http://{host}:{port}[/blue]")
+        socketio.run(app, host=host, port=port, debug=False)
+    except ImportError:
+        console.print("[red]Web UI 依赖未安装。运行：pip install clawflow[webui][/red]")
+
+
 if __name__ == "__main__":
     main()

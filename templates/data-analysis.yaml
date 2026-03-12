@@ -1,0 +1,61 @@
+# Data Analysis Workflow
+# 数据分析工作流
+
+name: data-analysis
+description: "从数据到洞察的分析流程"
+version: "1.0"
+
+agents:
+  router:
+    type: Router
+    description: "接收分析需求"
+  
+  planner:
+    type: Planner
+    description: "规划分析步骤"
+  
+  data_worker:
+    type: Worker
+    description: "数据采集、清洗、预处理"
+    capabilities: ["web_fetch", "exec", "read/write"]
+  
+  code_worker:
+    type: Worker
+    description: "编写分析脚本、可视化"
+    capabilities: ["exec", "read/write"]
+  
+  doc_worker:
+    type: Worker
+    description: "生成分析报告"
+    capabilities: ["read/write", "web_search"]
+
+workflow:
+  entry: router
+  steps:
+    - from: router
+      condition: valid_requirement
+      to: planner
+    
+    - from: planner
+      condition: plan_created
+      to: data_worker
+    
+    - from: data_worker
+      condition: execution_complete
+      to: code_worker
+    
+    - from: code_worker
+      condition: execution_complete
+      to: doc_worker
+    
+    - from: doc_worker
+      condition: execution_complete
+      to: router
+
+# 示例输入
+example_input: |
+  分析某电商平台的销售数据：
+  - 数据源：MySQL 数据库 sales_db
+  - 分析维度：时间、品类、地区
+  - 可视化：趋势图、热力图、漏斗图
+  - 输出：PDF 分析报告 + Jupyter Notebook

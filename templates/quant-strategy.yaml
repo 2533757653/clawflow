@@ -1,0 +1,71 @@
+# Quantitative Trading Strategy Workflow
+# 量化交易策略开发工作流
+
+name: quant-strategy
+description: "从想法到部署的量化策略开发全流程"
+version: "1.0"
+
+agents:
+  router:
+    type: Router
+    description: "接收策略想法，过滤无效需求"
+  
+  planner:
+    type: Planner
+    description: "拆解策略开发任务"
+  
+  data_worker:
+    type: Worker
+    description: "采集历史行情数据、财务数据"
+    capabilities: ["web_fetch", "exec"]
+  
+  code_worker:
+    type: Worker
+    description: "实现策略逻辑、回测框架"
+    capabilities: ["exec", "read/write"]
+  
+  review_worker:
+    type: Worker
+    description: "代码审查、策略风险评估"
+    capabilities: ["exec"]
+  
+  deploy_worker:
+    type: Worker
+    description: "部署到实盘环境"
+    capabilities: ["exec"]
+
+workflow:
+  entry: router
+  steps:
+    - from: router
+      condition: valid_requirement
+      to: planner
+    
+    - from: planner
+      condition: plan_created
+      to: data_worker
+    
+    - from: data_worker
+      condition: execution_complete
+      to: code_worker
+    
+    - from: code_worker
+      condition: execution_complete
+      to: review_worker
+    
+    - from: review_worker
+      condition: approval_passed
+      to: deploy_worker
+    
+    - from: deploy_worker
+      condition: execution_complete
+      to: router
+
+# 示例输入
+example_input: |
+  开发一个双均线交叉策略：
+  - 短期均线：5 日
+  - 长期均线：20 日
+  - 交易标的：沪深 300 成分股
+  - 回测期间：2020-2024
+  - 风险控制：单票最大仓位 10%
