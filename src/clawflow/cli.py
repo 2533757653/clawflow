@@ -146,9 +146,11 @@ def webui(host: str, port: int):
     try:
         from clawflow.webui.app import socketio, app
         console.print(f"[blue]启动 Web UI：http://{host}:{port}[/blue]")
-        socketio.run(app, host=host, port=port, debug=False)
-    except ImportError:
-        console.print("[red]Web UI 依赖未安装。运行：pip install clawflow[webui][/red]")
+        console.print(f"[dim]模板目录：/root/Agents/Profession/clawflow/templates[/dim]")
+        socketio.run(app, host=host, port=port, debug=False, allow_unsafe_werkzeug=True)
+    except ImportError as e:
+        console.print(f"[red]Web UI 启动失败：{e}[/red]")
+        console.print("[dim]尝试运行：pip install flask flask-socketio requests[/dim]")
 
 
 if __name__ == "__main__":
