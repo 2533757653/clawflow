@@ -1,0 +1,183 @@
+# ClawFlow 量化交易工作流配置
+# 三 Agent 协同：新闻分析 + K 线信号 + 交易执行
+
+version: "1.0"
+
+agents:
+  # 新闻分析 Agent
+  news_analyzer:
+    type: Worker
+    description: "阅读并总结市场新闻"
+    input:
+      - type: "text"
+        name: "news_sources"
+        description: "新闻来源列表"
+    output:
+      - type: "text"
+        name: "news_summary"
+        description: "新闻摘要和市场情绪"
+    tools:
+      - "web_fetch"
+      - "web_search"
+      - "memory_search"
+    rules:
+      - "只关注权威财经新闻源"
+      - "识别重大事件（财报、政策、并购等）"
+      - "判断市场情绪（正面/负面/中性）"
+      - "提取关键数据和日期"
+
+  # K 线信号分析 Agent
+  signal_analyzer:
+    type: Worker
+    description: "分析 K 线信号和行情数据"
+    input:
+      - type: "json"
+        name: "market_data"
+        description: "行情数据（OHLCV）"
+    output:
+      - type: "json"
+        name: "signal_analysis"
+        description: "技术信号和分析结果"
+    tools:
+      - "web_fetch"
+      - "exec"
+      - "read/write"
+    rules:
+      - "分析多时间周期（日线、小时线）"
+      - "识别关键支撑/阻力位"
+      - "检测技术指标信号（MACD、RSI、均线等）"
+      - "判断趋势方向和强度"
+
+  # 交易执行 Agent
+  trader:
+    type: Worker
+    description: "执行交易并管理风险"
+    input:
+      - type: "json"
+        name: "trading_plan"
+        description: "交易计划（来自决策者）"
+    output:
+      - type: "json"
+        name: "execution_report"
+        description: "交易执行报告"
+    tools:
+      - "exec"
+      - "message"
+    rules:
+      - "严格执行止盈止损"
+      - "记录所有交易细节"
+      - "实时监控仓位风险"
+      - "异常情况立即通知"
+
+  # 决策者 Agent（汇总三方信息）
+  decision_maker:
+    type: Orchestrator
+    description: "汇总分析结果，制定交易决策"
+    input:
+      - type: "json"
+        name: "news_summary"
+        description: "新闻分析结果"
+      - type: "json"
+        name: "signal_analysis"
+        description: "K 线信号分析"
+    output:
+      - type: "json"
+        name: "trading_plan"
+        description: "完整交易计划"
+    tools:
+      - "memory_search"
+      - "read/write"
+    rules:
+      - "综合新闻面和技术面"
+      - "必须包含：入场点、止盈、止损、仓位"
+      - "评估风险收益比（至少 1:2）"
+      - "明确交易理由和退出条件"
+
+workflow:
+  entry: "news_analyzer"
+  steps:
+    # 并行分析阶段
+    - from: "news_analyzer"
+      condition: "execution_complete"
+      to: "signal_analyzer"
+      description: "新闻分析完成后开始 K 线分析"
+
+    - from: "signal_analyzer"
+      condition: "execution_complete"
+      to: "decision_maker"
+      description: "K 线分析完成后提交决策者"
+
+    # 决策阶段
+    - from: "decision_maker"
+      condition: "plan_created"
+      to: "trader"
+      description: "交易计划传递给交易员"
+
+    # 执行阶段
+    - from: "trader"
+      condition: "execution_complete"
+      to: "decision_maker"
+      description: "执行结果反馈给决策者"
+
+# 交易参数配置
+trading_config:
+  # 风险参数
+  max_position_size: 0.1        # 最大仓位 10%
+  max_daily_loss: 0.02          # 单日最大亏损 2%
+  risk_reward_ratio: 2.0        # 最小风报比 1:2
+  
+  # 止盈止损策略
+  stop_loss_type: "percentage"  # 止损类型：percentage/trailing/technical
+  stop_loss_pct: 0.03           # 止损 3%
+  take_profit_pct: 0.06         # 止盈 6%
+  
+  # 交易时间
+  trading_hours:
+    start: "09:30"
+    end: "15:00"
+    timezone: "Asia/Shanghai"
+  
+  # 通知配置
+  notifications:
+    enabled: true
+    channels: ["message"]
+    events: ["order_filled", "stop_loss", "take_profit", "daily_report"]
+
+# 示例输入
+example_input: |
+  交易标的：沪深 300ETF (510300)
+  新闻来源：
+    - https://www.cls.cn
+    - https://wallstreetcn.com
+    - https://caixin.com
+  K 线周期：日线 + 60 分钟
+  可用资金：100000 元
+
+# 输出格式示例
+output_template: |
+  ## 交易决策报告
+  
+  ### 新闻面分析
+  - 市场情绪：[正面/负面/中性]
+  - 重大事件：[事件列表]
+  - 影响评估：[短期/中期/长期]
+  
+  ### 技术面分析
+  - 趋势方向：[上涨/下跌/震荡]
+  - 关键支撑：[价格]
+  - 关键阻力：[价格]
+  - 技术信号：[买入/卖出/观望]
+  
+  ### 交易计划
+  - 交易方向：[做多/做空]
+  - 入场价格：[价格]
+  - 止盈价格：[价格] (+X%)
+  - 止损价格：[价格] (-X%)
+  - 仓位大小：[X% 资金]
+  - 风险收益比：1:X
+  
+  ### 交易理由
+  [详细说明]
+  
+  ### 风险提示
+  [潜在风险]
