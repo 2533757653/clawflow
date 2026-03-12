@@ -1,0 +1,205 @@
+# ClawFlow 示例配置
+# 完整工作流：router → planner → reviewer → orchestrator → workers
+
+version: "1.0"
+
+agents:
+  # 入口路由
+  router:
+    type: Router
+    description: "入口路由器：过滤用户输入，提炼核心需求"
+    input:
+      - type: "text"
+        name: "user_input"
+        description: "原始用户输入"
+    output:
+      - type: "text"
+        name: "filtered_intent"
+        description: "提炼的核心需求意图"
+    tools:
+      - "memory_search"
+    rules:
+      - "只转发明确的项目需求、功能请求、问题解决类输入"
+      - "忽略闲聊、问候、模糊表达"
+
+  # 规划器
+  planner:
+    type: Planner
+    description: "任务规划器：将需求拆解为可执行子任务"
+    input:
+      - type: "text"
+        name: "requirement"
+        description: "用户提炼后的需求"
+    output:
+      - type: "json"
+        name: "task_plan"
+        description: "结构化任务计划"
+    tools:
+      - "memory_search"
+      - "web_search"
+      - "exec"
+    rules:
+      - "任务分解要具体、可衡量、有时限"
+      - "识别任务间的依赖关系和并行可能性"
+
+  # 审核器
+  reviewer:
+    type: Reviewer
+    description: "方案审核器：评估可行性与风险"
+    input:
+      - type: "json"
+        name: "task_plan"
+        description: "待审核的任务计划"
+    output:
+      - type: "json"
+        name: "review_result"
+        description: "审核结果"
+    tools:
+      - "memory_search"
+      - "web_search"
+    rules:
+      - "必须评估技术可行性"
+      - "识别潜在风险点并提出缓解措施"
+
+  # 调度器
+  orchestrator:
+    type: Orchestrator
+    description: "任务调度器：分发任务并汇总结果"
+    input:
+      - type: "json"
+        name: "approved_tasks"
+        description: "已审核通过的任务清单"
+    output:
+      - type: "json"
+        name: "execution_results"
+        description: "所有任务的执行结果汇总"
+    tools:
+      - "sessions_spawn"
+      - "sessions_history"
+      - "sessions_send"
+      - "subagents"
+    rules:
+      - "按任务类型分发到对应 worker"
+      - "支持并行执行同类型任务"
+      - "处理执行失败的情况"
+
+  # 数据工作单元
+  data_worker:
+    type: Worker
+    description: "数据处理器：负责数据采集、清洗、预处理"
+    tools:
+      - "exec"
+      - "web_fetch"
+      - "read/write/edit"
+    rules:
+      - "确保数据质量和完整性"
+      - "记录数据处理日志"
+
+  # 代码工作单元
+  code_worker:
+    type: Worker
+    description: "代码实现器：负责功能开发、算法实现"
+    tools:
+      - "exec"
+      - "read/write/edit"
+      - "web_search"
+    rules:
+      - "遵循编码规范"
+      - "包含必要注释和文档"
+      - "进行基本功能测试"
+
+  # 文档工作单元
+  doc_worker:
+    type: Worker
+    description: "文档生成器：负责生成技术文档、使用说明"
+    tools:
+      - "read/write/edit"
+      - "web_search"
+    rules:
+      - "保持文档结构清晰"
+      - "确保内容准确性和完整性"
+
+  # 监控器
+  monitor:
+    type: Monitor
+    description: "系统监控器：独立运行，采集状态指标"
+    input: []
+    output:
+      - type: "json"
+        name: "system_metrics"
+        description: "系统运行指标和任务状态报告"
+    tools:
+      - "sessions_list"
+      - "process"
+      - "exec"
+    rules:
+      - "定期执行，不阻塞主流程"
+      - "生成运行报告和异常告警"
+
+# 工作流定义
+workflow:
+  entry: "router"
+  steps:
+    # 主流程
+    - from: "router"
+      condition: "valid_requirement"
+      to: "planner"
+      description: "有效需求进入规划阶段"
+    
+    - from: "planner"
+      condition: "plan_created"
+      to: "reviewer"
+      description: "规划完成送审"
+
+    - from: "reviewer"
+      condition: "approval_passed"
+      to: "orchestrator"
+      description: "审核通过开始执行"
+
+    - from: "reviewer"
+      condition: "rejection_needed"
+      to: "planner"
+      description: "审核未通过返回重新规划"
+
+    # 任务分发
+    - from: "orchestrator"
+      condition: "dispatch_data_task"
+      to: "data_worker"
+      description: "数据任务分发"
+
+    - from: "orchestrator"
+      condition: "dispatch_code_task"
+      to: "code_worker"
+      description: "代码任务分发"
+
+    - from: "orchestrator"
+      condition: "dispatch_doc_task"
+      to: "doc_worker"
+      description: "文档任务分发"
+
+    # 任务完成返回
+    - from: "data_worker"
+      condition: "execution_complete"
+      to: "orchestrator"
+      description: "数据任务完成返回"
+
+    - from: "code_worker"
+      condition: "execution_complete"
+      to: "orchestrator"
+      description: "代码任务完成返回"
+
+    - from: "doc_worker"
+      condition: "execution_complete"
+      to: "orchestrator"
+      description: "文档任务完成返回"
+
+    - from: "orchestrator"
+      condition: "all_tasks_completed"
+      to: "router"
+      description: "所有任务完成返回结果"
+
+  # 后台服务
+  background_services:
+    - agent: "monitor"
+      interval_seconds: 300
+      description: "每 5 分钟采集系统指标"

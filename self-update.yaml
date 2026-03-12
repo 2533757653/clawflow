@@ -1,0 +1,93 @@
+# ClawFlow 自更新工作流
+# 使用 ClawFlow 自身来更新 ClawFlow
+
+version: "1.0"
+
+agents:
+  # 入口：检测更新需求
+  router:
+    type: Router
+    description: "检测自更新请求"
+    tools:
+      - "exec"  # 检查 git 状态
+      - "web_search"  # 检查新版本
+    rules:
+      - "只响应明确的更新请求"
+      - "检查当前版本与最新版本"
+
+  # 规划：制定更新计划
+  planner:
+    type: Planner
+    description: "制定更新计划"
+    tools:
+      - "exec"  # 分析变更
+      - "read/write"  # 读取版本信息
+    rules:
+      - "列出所有需要更新的文件"
+      - "评估更新风险"
+      - "制定回滚方案"
+
+  # 审核：确认更新安全
+  reviewer:
+    type: Reviewer
+    description: "审核更新方案"
+    tools:
+      - "exec"  # 运行测试
+    rules:
+      - "确保向后兼容"
+      - "验证迁移脚本"
+      - "必须有回滚方案"
+
+  # 执行：代码更新
+  code_worker:
+    type: Worker
+    description: "执行代码更新"
+    tools:
+      - "exec"  # git pull / patch
+      - "read/write/edit"  # 文件更新
+    rules:
+      - "先备份当前版本"
+      - "原子性更新"
+      - "更新后验证"
+
+  # 部署：重新加载
+  deploy_worker:
+    type: Worker
+    description: "重新加载框架"
+    tools:
+      - "exec"  # 重启服务
+      - "process"  # 管理进程
+    rules:
+      - "确保平滑过渡"
+      - "验证服务健康"
+
+workflow:
+  entry: "router"
+  steps:
+    - from: "router"
+      condition: "valid_requirement"
+      to: "planner"
+    
+    - from: "planner"
+      condition: "plan_created"
+      to: "reviewer"
+    
+    - from: "reviewer"
+      condition: "approval_passed"
+      to: "code_worker"
+    
+    - from: "code_worker"
+      condition: "execution_complete"
+      to: "deploy_worker"
+    
+    - from: "deploy_worker"
+      condition: "execution_complete"
+      to: "router"
+
+# 自更新元数据
+self_update:
+  enabled: true
+  version_file: "src/clawflow/__init__.py"
+  version_pattern: '__version__ = "([0-9.]+)"'
+  backup_dir: ".clawflow/backups"
+  auto_rollback: true
