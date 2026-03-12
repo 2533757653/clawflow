@@ -2,9 +2,11 @@
 
 **Multi-Agent Workflow Orchestrator for OpenClaw**
 
+![ClawFlow Web UI](Picture.png)
+
 ## Core Philosophy
 
-**Automated闭环 from Idea to Production**
+**Automated closed-loop from Idea to Production**
 
 ```
 Idea → Requirement → Planning → Review → Execution → Deployment → Documentation
@@ -21,6 +23,9 @@ clawflow init my-project
 
 # Run workflow
 clawflow run claw.yaml
+
+# Start Web UI
+clawflow webui --port 8766
 ```
 
 ## Architecture
@@ -89,6 +94,15 @@ clawhub install clawflow
 clawflow run "Create a data analysis feature"
 ```
 
+### 🌐 Web UI
+
+Access the Web UI at `http://localhost:8766` for:
+- Real-time system status dashboard
+- Active agents monitoring
+- Workflow execution interface
+- Template marketplace browser
+- Execution logs
+
 ## Built-in Agents
 
 | Agent | Type | Responsibility |
@@ -128,6 +142,10 @@ curl -X POST http://localhost:8765/agents/create \
     "type": "Worker",
     "capabilities": ["exec", "web_search"]
   }'
+
+# Web UI API
+curl http://localhost:8766/api/templates
+curl http://localhost:8766/api/status
 ```
 
 ## Project Structure
@@ -142,7 +160,18 @@ clawflow/
 │   ├── message_bus.py    # Message bus (async communication)
 │   ├── agent_base.py     # Agent base classes
 │   ├── server.py         # Independent HTTP service
-│   └── cli.py            # Command-line interface
+│   ├── cli.py            # Command-line interface
+│   └── webui/
+│       ├── app.py        # Web UI Flask backend
+│       └── templates/
+│           └── index.html # Web UI frontend
+├── templates/            # Pre-built workflow templates
+│   ├── quant-strategy.yaml
+│   ├── code-dev.yaml
+│   ├── data-analysis.yaml
+│   ├── research-paper.yaml
+│   ├── self-update.yaml
+│   └── README.md
 ├── examples/
 │   └── claw.yaml         # Example workflow
 ├── self-update.yaml      # Self-update workflow
@@ -150,6 +179,7 @@ clawflow/
 │   └── clawflow-skill/
 │       └── SKILL.md      # OpenClaw skill definition
 ├── pyproject.toml
+├── setup.py
 └── README.md
 ```
 
@@ -158,6 +188,9 @@ clawflow/
 ```bash
 # Install dev dependencies
 pip install -e ".[dev]"
+
+# Install Web UI dependencies
+pip install -e ".[webui]"
 
 # Run tests
 pytest

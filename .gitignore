@@ -71,3 +71,10 @@ venv.bak/
 output/
 *.log
 state.db
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.webp
+!docs/images/

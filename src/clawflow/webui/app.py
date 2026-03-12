@@ -18,8 +18,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # ClawFlow 服务地址
 CLAWFLOW_SERVICE_URL = os.environ.get('CLAWFLOW_SERVICE_URL', 'http://localhost:8765')
 
-# 模板目录
-TEMPLATES_DIR = Path(__file__).parent.parent / 'templates'
+# 模板目录（指向项目根目录的 templates 文件夹）
+TEMPLATES_DIR = Path(__file__).parent.parent.parent.parent / 'templates'
 
 
 @app.route('/')
