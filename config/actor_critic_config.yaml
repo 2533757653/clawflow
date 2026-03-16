@@ -1,0 +1,95 @@
+# ClawFlow Actor-Critic 配置文件
+# 定义演员-评论家行为模式
+
+version: "1.0"
+
+actor_critic:
+  # 演员(Actor) 配置
+  actor:
+    name: "Actor"
+    description: "执行更新操作的智能体"
+    behaviors:
+      - name: "perform_git_pull"
+        command: "git pull origin master"
+        timeout: 30
+        workspace: "/root/Agents/Profession/clawflow"
+        success_indicators:
+          - "Already up to date"
+          - "Updating"
+          - "Fast-forward"
+        failure_indicators:
+          - "fatal:"
+          - "error:"
+          - "CONFLICT"
+      
+      - name: "update_dependencies"
+        command: "pip install -e ."
+        timeout: 60
+        workspace: "/root/Agents/Profession/clawflow"
+        success_indicators:
+          - "Successfully installed"
+          - "Requirement already satisfied"
+        failure_indicators:
+          - "ERROR:"
+          - "Failed"
+          - "Exception"
+    
+    # 执行策略
+    execution_strategy:
+      max_retries: 2
+      retry_delay: 5
+      parallel_execution: false
+  
+  # 评论家(Critic) 配置
+  critic:
+    name: "Critic"
+    description: "评估更新结果的智能体"
+    evaluation_criteria:
+      - name: "update_success"
+        weight: 0.7
+        scoring:
+          excellent: 10
+          good: 8
+          average: 5
+          poor: 2
+          failure: 0
+      
+      - name: "system_stability"
+        weight: 0.2
+        scoring:
+          stable: 10
+          mostly_stable: 7
+          unstable: 3
+          critical: 0
+      
+      - name: "risk_assessment"
+        weight: 0.1
+        scoring:
+          low_risk: 10
+          medium_risk: 5
+          high_risk: 1
+    
+    feedback_templates:
+      positive:
+        - "✅ 更新成功，系统稳定"
+        - "👍 操作顺利完成"
+        - "🎯 目标达成"
+      negative:
+        - "⚠️ 检测到潜在问题"
+        - "❌ 操作失败"
+        - "📉 性能下降"
+  
+  # 迭代控制配置
+  iteration_control:
+    max_iterations: 3
+    pause_between_iterations: 30  # 秒
+    min_acceptable_score: 5
+    stop_on_low_score: true
+    continue_on_high_score: true
+  
+  # 日志记录
+  logging:
+    level: "INFO"
+    file: "actor_critic_updates.log"
+    max_file_size: "10MB"
+    backup_count: 5

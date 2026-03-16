@@ -217,8 +217,13 @@ class ClawFlowRequestHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         
+        print(f"[HTTP POST] Path: {path}")
+        
         content_length = int(self.headers.get('Content-Length', 0))
+        print(f"[HTTP POST] Content-Length: {content_length}")
+        
         body = self.rfile.read(content_length).decode('utf-8')
+        print(f"[HTTP POST] Body: {body[:100]}")
         
         try:
             data = json.loads(body) if body else {}
