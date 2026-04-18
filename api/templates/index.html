@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/antd/5.12.0/reset.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/antd/5.12.0/antd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/axios/1.6.2/axios.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        #root { min-height: 100vh; }
+        .logo { font-size: 24px; color: #1890ff; margin-right: 12px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .page-title { margin: 0; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .org-card { cursor: pointer; transition: all 0.3s; }
+        .org-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .org-card.selected { border-color: #1890ff; box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+        .empty-state { text-align: center; padding: 60px 20px; background: #fafafa; border-radius: 8px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin: 32px 0 16px; }
+        .section-title { margin: 0; font-size: 18px; }
+        .node-tag { margin: 2px; }
+        .hierarchy-tree { padding: 16px; }
+        .flow-canvas { width: 100%; height: 500px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px; position: relative; }
+        .flow-node { position: absolute; padding: 12px 16px; border-radius: 8px; cursor: move; font-weight: 500; min-width: 120px; text-align: center; }
+        .flow-node.role { background: #e6f7ff; border: 2px solid #1890ff; }
+        .flow-node.task { background: #fff7e6; border: 2px solid #fa8c16; }
+        .flow-node.knowledge { background: #f6ffed; border: 2px solid #52c41a; }
+        .flow-node.input, .flow-node.output { background: #f0f5ff; border: 2px solid #722ed1; }
+        .flow-edge { position: absolute; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    {% raw %}
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+        const { ConfigProvider, Layout, Menu, Typography, Card, Button, Table, Form, Input, Select, Modal, Tag, Space, message, Tree, Tabs, Popconfirm, Row, Col, Statistic } = antd;
+
+        const { Header, Sider, Content } = Layout;
+        const { Title, Text } = Typography;
+        const { Option } = Select;
+
+        const API_BASE = '/api/v1';
+
+        const api = {
+            async listOrgs() { const r = await axios.get(`${API_BASE}/organizations`); return r.data; },
+            async createOrg(org) { const r = await axios.post(`${API_BASE}/organizations`, org); return r.data; },
+            async updateOrg(id, org) { const r = await axios.put(`${API_BASE}/organizations/${id}`, org); return r.data; },
+            async deleteOrg(id) { await axios.delete(`${API_BASE}/organizations/${id}`); },
+            async deployOrg(id) { const r = await axios.post(`${API_BASE}/organizations/${id}/deploy`); return r.data; },
+            async listRoles(orgId) { const r = await axios.get(`${API_BASE}/organizations/${orgId}/roles`); return r.data; },
+            async createRole(orgId, role) { const r = await axios.post(`${API_BASE}/organizations/${orgId}/roles`, role); return r.data; },
+            async updateRole(orgId, roleId, role) { const r = await axios.put(`${API_BASE}/organizations/${orgId}/roles/${roleId}`, role); return r.data; },
+            async deleteRole(orgId, roleId) { await axios.delete(`${API_BASE}/organizations/${orgId}/roles/${roleId}`); },
+            async listTasks(orgId) { const r = await axios.get(`${API_BASE}/organizations/${orgId}/tasks`); return r.data; },
+            async createTask(orgId, task) { const r = await axios.post(`${API_BASE}/organizations/${orgId}/tasks`, task); return r.data; },
+            async updateTask(orgId, taskId, task) { const r = await axios.put(`${API_BASE}/organizations/${orgId}/tasks/${taskId}`, task); return r.data; },
+            async deleteTask(orgId, taskId) { await axios.delete(`${API_BASE}/organizations/${orgId}/tasks/${taskId}`); },
+            async listDataflows(orgId) { const r = await axios.get(`${API_BASE}/organizations/${orgId}/dataflows`); return r.data; },
+            async createDataflow(orgId, df) { const r = await axios.post(`${API_BASE}/organizations/${orgId}/dataflows`, df); return r.data; },
+            async updateDataflow(orgId, dfId, df) { const r = await axios.put(`${API_BASE}/organizations/${orgId}/dataflows/${dfId}`, df); return r.data; },
+            async deleteDataflow(orgId, dfId) { await axios.delete(`${API_BASE}/organizations/${orgId}/dataflows/${dfId}`); },
+            async listKnowledge(orgId) { const r = await axios.get(`${API_BASE}/organizations/${orgId}/knowledge`); return r.data; },
+            async createKnowledge(orgId, kb) { const r = await axios.post(`${API_BASE}/organizations/${orgId}/knowledge`, kb); return r.data; },
+            async updateKnowledge(orgId, kbId, kb) { const r = await axios.put(`${API_BASE}/organizations/${orgId}/knowledge/${kbId}`, kb); return r.data; },
+            async deleteKnowledge(orgId, kbId) { await axios.delete(`${API_BASE}/organizations/${orgId}/knowledge/${kbId}`); },
+            async searchSkills(q) { const r = await axios.get(`${API_BASE}/skills/search`, { params: { q } }); return r.data; },
+            async listSkills() { const r = await axios.get(`${API_BASE}/skills`); return r.data; },
+            async installSkill(id) { const r = await axios.post(`${API_BASE}/skills/${id}/install`); return r.data; },
+            async uninstallSkill(id) { await axios.delete(`${API_BASE}/skills/${id}/uninstall`); },
+        };
+
+        const statusColors = { draft: 'default', deployed: 'blue', running: 'green', stopped: 'red' };
+        const priorityColors = { high: 'red', medium: 'orange', low: 'green' };
+        const nodeColors = { role: '#1890ff', task: '#fa8c16', knowledge: '#52c41a', input: '#722ed1', output: '#eb2f96' };
+
+        function Dashboard({ currentOrg, setCurrentOrg, orgs, setOrgs, refreshOrgs, roles, tasks }) {
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [form] = Form.useForm();
+
+            const handleCreate = async (values) => {
+                try {
+                    const org = await api.createOrg(values);
+                    setOrgs([...orgs, org]);
+                    setCurrentOrg(org);
+                    setIsModalOpen(false);
+                    form.resetFields();
+                    message.success('组织创建成功');
+                } catch { message.error('创建失败'); }
+            };
+
+            const handleDelete = async (id, e) => {
+                e.stopPropagation();
+                try {
+                    await api.deleteOrg(id);
+                    await refreshOrgs();
+                    if (currentOrg?.id === id) setCurrentOrg(null);
+                    message.success('删除成功');
+                } catch { message.error('删除失败'); }
+            };
+
+            const handleDeploy = async (id, e) => {
+                e.stopPropagation();
+                try {
+                    await api.deployOrg(id);
+                    await refreshOrgs();
+                    message.success('部署成功');
+                } catch { message.error('部署失败'); }
+            };
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Space>
+                            <Title level={3} className="page-title">组织概览</Title>
+                            {currentOrg && <Tag color="blue">{currentOrg.name}</Tag>}
+                        </Space>
+                        <Button type="primary" onClick={() => setIsModalOpen(true)}>+ 创建组织</Button>
+                    </div>
+
+                    <Row gutter={16} style={{ marginBottom: 24 }}>
+                        <Col span={6}><Card><Statistic title="组织总数" value={orgs.length} /></Card></Col>
+                        <Col span={6}><Card><Statistic title="已部署" value={orgs.filter(o => o.status === 'deployed' || o.status === 'running').length} valueStyle={{ color: '#52c41a' }} /></Card></Col>
+                        <Col span={6}><Card><Statistic title="草稿" value={orgs.filter(o => o.status === 'draft').length} /></Card></Col>
+                        <Col span={6}><Card><Statistic title="角色数" value={roles.length} /></Card></Col>
+                    </Row>
+
+                    <Title level={4}>组织列表</Title>
+                    {orgs.length === 0 ? (
+                        <div className="empty-state">
+                            <Text type="secondary">暂无组织，点击上方按钮创建一个</Text>
+                        </div>
+                    ) : (
+                        <div className="card-grid">
+                            {orgs.map(org => (
+                                <Card
+                                    key={org.id}
+                                    className={`org-card ${currentOrg?.id === org.id ? 'selected' : ''}`}
+                                    onClick={() => setCurrentOrg(org)}
+                                    actions={[
+                                        <Button type="link" onClick={(e) => handleDeploy(org.id, e)}>部署</Button>,
+                                        <Button type="link" danger onClick={(e) => handleDelete(org.id, e)}>删除</Button>
+                                    ]}
+                                >
+                                    <Card.Meta
+                                        title={org.name}
+                                        description={<Space direction="vertical" size="small">
+                                            <Text type="secondary">{org.description || '暂无描述'}</Text>
+                                            <Tag color={statusColors[org.status]}>{org.status?.toUpperCase()}</Tag>
+                                        </Space>}
+                                    />
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+
+                    <Modal title="创建组织" open={isModalOpen} onOk={() => form.submit()} onCancel={() => setIsModalOpen(false)}>
+                        <Form form={form} onFinish={handleCreate} layout="vertical">
+                            <Form.Item name="name" label="组织名称" rules={[{ required: true }]}>
+                                <Input placeholder="请输入组织名称" />
+                            </Form.Item>
+                            <Form.Item name="description" label="描述">
+                                <Input.TextArea placeholder="请输入描述" rows={3} />
+                            </Form.Item>
+                        </Form>
+                    </Modal>
+                </div>
+            );
+        }
+
+        function RoleEditor({ currentOrg, roles, setRoles, tasks }) {
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [isHierarchyOpen, setIsHierarchyOpen] = useState(false);
+            const [editingRole, setEditingRole] = useState(null);
+            const [form] = Form.useForm();
+
+            useEffect(() => {
+                if (currentOrg) loadRoles();
+            }, [currentOrg]);
+
+            const loadRoles = async () => {
+                try {
+                    const data = await api.listRoles(currentOrg.id);
+                    setRoles(data);
+                } catch {}
+            };
+
+            const handleCreate = async (values) => {
+                try {
+                    await api.createRole(currentOrg.id, { ...values, hierarchy_level: values.hierarchy_level || 1, permission_level: values.permission_level || 'member' });
+                    await loadRoles();
+                    setIsModalOpen(false);
+                    form.resetFields();
+                    message.success('角色创建成功');
+                } catch { message.error('创建失败'); }
+            };
+
+            const handleDelete = async (roleId) => {
+                try {
+                    await api.deleteRole(currentOrg.id, roleId);
+                    await loadRoles();
+                    message.success('删除成功');
+                } catch { message.error('删除失败'); }
+            };
+
+            const openEdit = (role) => {
+                setEditingRole(role);
+                form.setFieldsValue(role);
+                setIsModalOpen(true);
+            };
+
+            const columns = [
+                { title: '角色名称', dataIndex: 'name' },
+                { title: '描述', dataIndex: 'description', ellipsis: true },
+                { title: '层级', dataIndex: 'hierarchy_level', render: (l) => <Tag color="blue">Level {l}</Tag> },
+                { title: '权限', dataIndex: 'permission_level', render: (p) => <Tag>{p}</Tag> },
+                { title: '汇报给', dataIndex: 'reports_to', render: (rt) => rt ? <Tag>{roles.find(r => r.id === rt)?.name}</Tag> : <Tag>顶级</Tag> },
+                { title: '职责数', dataIndex: 'responsibilities', render: (r) => <Tag>{r?.length || 0}</Tag> },
+                {
+                    title: '操作',
+                    render: (_, record) => (
+                        <Space>
+                            <Button size="small" onClick={() => openEdit(record)}>编辑</Button>
+                            <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
+                                <Button size="small" danger>删除</Button>
+                            </Popconfirm>
+                        </Space>
+                    )
+                }
+            ];
+
+            if (!currentOrg) return <div className="empty-state"><Text type="secondary">请先选择一个组织</Text></div>;
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Title level={3} className="page-title">角色管理</Title>
+                        <Space>
+                            <Button onClick={() => setIsHierarchyOpen(true)}>查看层级</Button>
+                            <Button type="primary" onClick={() => { setEditingRole(null); form.resetFields(); setIsModalOpen(true); }}>+ 创建角色</Button>
+                        </Space>
+                    </div>
+                    <Table columns={columns} dataSource={roles} rowKey="id" pagination={{ pageSize: 10 }} />
+
+                    <Modal
+                        title={editingRole ? '编辑角色' : '创建角色'}
+                        open={isModalOpen}
+                        onOk={() => form.submit()}
+                        onCancel={() => { setIsModalOpen(false); setEditingRole(null); }}
+                        width={600}
+                    >
+                        <Form form={form} onFinish={handleCreate} layout="vertical">
+                            <Form.Item name="name" label="角色名称" rules={[{ required: true }]}>
+                                <Input />
+                            </Form.Item>
+                            <Form.Item name="description" label="描述">
+                                <Input.TextArea rows={2} />
+                            </Form.Item>
+                            <Form.Item name="hierarchy_level" label="层级" initialValue={1}>
+                                <Select>
+                                    <Option value={1}>Level 1 - 基础角色</Option>
+                                    <Option value={2}>Level 2 - 小组负责人</Option>
+                                    <Option value={3}>Level 3 - 部门负责人</Option>
+                                    <Option value={4}>Level 4 - 高层管理</Option>
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="permission_level" label="权限" initialValue="member">
+                                <Select>
+                                    <Option value="admin">管理员</Option>
+                                    <Option value="manager">经理</Option>
+                                    <Option value="member">成员</Option>
+                                    <Option value="readonly">只读</Option>
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="reports_to" label="汇报对象">
+                                <Select allowClear placeholder="选择汇报对象">
+                                    {roles.filter(r => r.id !== editingRole?.id).map(r => <Option key={r.id} value={r.id}>{r.name}</Option>)}
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="responsibilities" label="职责">
+                                <Select mode="tags" placeholder="输入后回车">
+                                    {editingRole?.responsibilities?.map(r => <Option key={r} value={r}>{r}</Option>)}
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="required_skills" label="所需技能">
+                                <Select mode="tags" placeholder="输入后回车">
+                                    {editingRole?.required_skills?.map(s => <Option key={s} value={s}>{s}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Form>
+                    </Modal>
+
+                    <Modal title="角色层级" open={isHierarchyOpen} onCancel={() => setIsHierarchyOpen(false)} footer={null}>
+                        <Tree
+                            treeData={buildHierarchyTree(roles)}
+                            defaultExpandAll
+                        />
+                    </Modal>
+                </div>
+            );
+        }
+
+        function buildHierarchyTree(roles, parentId = null) {
+            return roles
+                .filter(r => r.reports_to === parentId)
+                .map(r => ({
+                    title: <span>{r.name} <Tag color="blue">L{r.hierarchy_level}</Tag></span>,
+                    key: r.id,
+                    children: buildHierarchyTree(roles, r.id)
+                }));
+        }
+
+        function TaskEditor({ currentOrg, tasks, setTasks, roles }) {
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingTask, setEditingTask] = useState(null);
+            const [form] = Form.useForm();
+
+            useEffect(() => {
+                if (currentOrg) loadTasks();
+            }, [currentOrg]);
+
+            const loadTasks = async () => {
+                try {
+                    const data = await api.listTasks(currentOrg.id);
+                    setTasks(data);
+                } catch {}
+            };
+
+            const handleCreate = async (values) => {
+                try {
+                    await api.createTask(currentOrg.id, values);
+                    await loadTasks();
+                    setIsModalOpen(false);
+                    form.resetFields();
+                    message.success('任务创建成功');
+                } catch { message.error('创建失败'); }
+            };
+
+            const handleDelete = async (taskId) => {
+                try {
+                    await api.deleteTask(currentOrg.id, taskId);
+                    await loadTasks();
+                    message.success('删除成功');
+                } catch { message.error('删除失败'); }
+            };
+
+            const columns = [
+                { title: '任务名称', dataIndex: 'name' },
+                { title: '描述', dataIndex: 'description', ellipsis: true },
+                { title: '优先级', dataIndex: 'priority', render: (p) => <Tag color={priorityColors[p]}>{p?.toUpperCase()}</Tag> },
+                { title: '执行模式', dataIndex: 'execution_mode', render: (m) => <Tag>{m === 'sequential' ? '顺序' : m === 'parallel' ? '并行' : '条件'}</Tag> },
+                { title: '分配角色', dataIndex: 'assigned_role_id', render: (rid) => rid ? <Tag>{roles.find(r => r.id === rid)?.name}</Tag> : <Tag>未分配</Tag> },
+                { title: '依赖', dataIndex: 'dependencies', render: (d) => <Tag>{d?.length || 0}</Tag> },
+                {
+                    title: '操作',
+                    render: (_, record) => (
+                        <Space>
+                            <Button size="small" onClick={() => { setEditingTask(record); form.setFieldsValue(record); setIsModalOpen(true); }}>编辑</Button>
+                            <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
+                                <Button size="small" danger>删除</Button>
+                            </Popconfirm>
+                        </Space>
+                    )
+                }
+            ];
+
+            if (!currentOrg) return <div className="empty-state"><Text type="secondary">请先选择一个组织</Text></div>;
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Title level={3} className="page-title">任务管理</Title>
+                        <Button type="primary" onClick={() => { setEditingTask(null); form.resetFields(); setIsModalOpen(true); }}>+ 创建任务</Button>
+                    </div>
+                    <Table columns={columns} dataSource={tasks} rowKey="id" pagination={{ pageSize: 10 }} />
+
+                    <Modal
+                        title={editingTask ? '编辑任务' : '创建任务'}
+                        open={isModalOpen}
+                        onOk={() => form.submit()}
+                        onCancel={() => { setIsModalOpen(false); setEditingTask(null); }}
+                        width={600}
+                    >
+                        <Form form={form} onFinish={handleCreate} layout="vertical">
+                            <Form.Item name="name" label="任务名称" rules={[{ required: true }]}>
+                                <Input />
+                            </Form.Item>
+                            <Form.Item name="description" label="描述">
+                                <Input.TextArea rows={2} />
+                            </Form.Item>
+                            <Form.Item name="priority" label="优先级" initialValue="medium">
+                                <Select><Option value="high">高</Option><Option value="medium">中</Option><Option value="low">低</Option></Select>
+                            </Form.Item>
+                            <Form.Item name="execution_mode" label="执行模式" initialValue="sequential">
+                                <Select><Option value="sequential">顺序执行</Option><Option value="parallel">并行执行</Option><Option value="conditional">条件执行</Option></Select>
+                            </Form.Item>
+                            <Form.Item name="assigned_role_id" label="分配角色">
+                                <Select allowClear placeholder="选择执行角色">
+                                    {roles.map(r => <Option key={r.id} value={r.id}>{r.name}</Option>)}
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="dependencies" label="依赖任务">
+                                <Select mode="multiple" allowClear>
+                                    {tasks.filter(t => t.id !== editingTask?.id).map(t => <Option key={t.id} value={t.id}>{t.name}</Option>)}
+                                </Select>
+                            </Form.Item>
+                        </Form>
+                    </Modal>
+                </div>
+            );
+        }
+
+        function DataFlowEditor({ currentOrg, dataflows, setDataflows, roles, tasks }) {
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [isDesignerOpen, setIsDesignerOpen] = useState(false);
+            const [editingDf, setEditingDf] = useState(null);
+            const [form] = Form.useForm();
+            const [nodes, setNodes] = useState([]);
+            const [edges, setEdges] = useState([]);
+
+            useEffect(() => {
+                if (currentOrg) loadDataflows();
+            }, [currentOrg]);
+
+            const loadDataflows = async () => {
+                try {
+                    const data = await api.listDataflows(currentOrg.id);
+                    setDataflows(data);
+                } catch {}
+            };
+
+            const handleCreate = async (values) => {
+                try {
+                    await api.createDataflow(currentOrg.id, { ...values, nodes: [], edges: [] });
+                    await loadDataflows();
+                    setIsModalOpen(false);
+                    form.resetFields();
+                    message.success('数据流创建成功');
+                } catch { message.error('创建失败'); }
+            };
+
+            const handleDelete = async (dfId) => {
+                try {
+                    await api.deleteDataflow(currentOrg.id, dfId);
+                    await loadDataflows();
+                    message.success('删除成功');
+                } catch { message.error('删除失败'); }
+            };
+
+            const openDesigner = (df) => {
+                setEditingDf(df);
+                setNodes(df.nodes?.map(n => ({ ...n, style: { left: n.position?.x || 100, top: n.position?.y || 100 } })) || []);
+                setEdges(df.edges || []);
+                setIsDesignerOpen(true);
+            };
+
+            const addNode = (type) => {
+                const newNode = {
+                    id: `${type}-${Date.now()}`,
+                    type,
+                    label: `新${type}`,
+                    position: { x: 100 + Math.random() * 200, y: 100 + Math.random() * 200 },
+                    style: { left: 100 + Math.random() * 200, top: 100 + Math.random() * 200 }
+                };
+                setNodes([...nodes, newNode]);
+            };
+
+            const saveDesigner = async () => {
+                try {
+                    const updatedDf = {
+                        ...editingDf,
+                        nodes: nodes.map(n => ({ id: n.id, type: n.type, label: n.label, position: { x: n.style.left, y: n.style.top } })),
+                        edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, condition: e.condition }))
+                    };
+                    await api.updateDataflow(currentOrg.id, editingDf.id, updatedDf);
+                    await loadDataflows();
+                    setIsDesignerOpen(false);
+                    message.success('保存成功');
+                } catch { message.error('保存失败'); }
+            };
+
+            const columns = [
+                { title: '名称', dataIndex: 'name' },
+                { title: '描述', dataIndex: 'description', ellipsis: true },
+                { title: '节点', dataIndex: 'nodes', render: (n) => <Tag>{n?.length || 0}</Tag> },
+                { title: '连接', dataIndex: 'edges', render: (e) => <Tag>{e?.length || 0}</Tag> },
+                {
+                    title: '操作',
+                    render: (_, record) => (
+                        <Space>
+                            <Button size="small" onClick={() => openDesigner(record)}>设计</Button>
+                            <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
+                                <Button size="small" danger>删除</Button>
+                            </Popconfirm>
+                        </Space>
+                    )
+                }
+            ];
+
+            if (!currentOrg) return <div className="empty-state"><Text type="secondary">请先选择一个组织</Text></div>;
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Title level={3} className="page-title">数据流设计</Title>
+                        <Button type="primary" onClick={() => { form.resetFields(); setIsModalOpen(true); }}>+ 创建数据流</Button>
+                    </div>
+                    <Table columns={columns} dataSource={dataflows} rowKey="id" pagination={{ pageSize: 10 }} />
+
+                    <Modal title="创建数据流" open={isModalOpen} onOk={() => form.submit()} onCancel={() => setIsModalOpen(false)}>
+                        <Form form={form} onFinish={handleCreate} layout="vertical">
+                            <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
+                            <Form.Item name="description" label="描述"><Input.TextArea rows={2} /></Form.Item>
+                        </Form>
+                    </Modal>
+
+                    <Modal title="数据流设计器" open={isDesignerOpen} onOk={saveDesigner} onCancel={() => setIsDesignerOpen(false)} width={1000}>
+                        <Space style={{ marginBottom: 16 }}>
+                            <Button onClick={() => addNode('role')}>+ 角色</Button>
+                            <Button onClick={() => addNode('task')}>+ 任务</Button>
+                            <Button onClick={() => addNode('knowledge')}>+ 知识</Button>
+                            <Button onClick={() => addNode('input')}>+ 输入</Button>
+                            <Button onClick={() => addNode('output')}>+ 输出</Button>
+                        </Space>
+                        <div className="flow-canvas">
+                            {nodes.map(node => (
+                                <div
+                                    key={node.id}
+                                    className={`flow-node ${node.type}`}
+                                    style={node.style}
+                                    draggable
+                                    onDragEnd={(e) => {
+                                        const rect = e.target.parentElement.getBoundingClientRect();
+                                        setNodes(nodes.map(n => n.id === node.id ? {
+                                            ...n,
+                                            style: { ...n.style, left: e.clientX - rect.left, top: e.clientY - rect.top }
+                                        } : n));
+                                    }}
+                                >
+                                    {node.label}
+                                </div>
+                            ))}
+                        </div>
+                    </Modal>
+                </div>
+            );
+        }
+
+        function KnowledgeBase({ currentOrg, knowledge, setKnowledge }) {
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingKb, setEditingKb] = useState(null);
+            const [searchText, setSearchText] = useState('');
+            const [form] = Form.useForm();
+
+            useEffect(() => {
+                if (currentOrg) loadKnowledge();
+            }, [currentOrg]);
+
+            const loadKnowledge = async () => {
+                try {
+                    const data = await api.listKnowledge(currentOrg.id);
+                    setKnowledge(data);
+                } catch {}
+            };
+
+            const handleCreate = async (values) => {
+                try {
+                    await api.createKnowledge(currentOrg.id, values);
+                    await loadKnowledge();
+                    setIsModalOpen(false);
+                    form.resetFields();
+                    message.success('知识创建成功');
+                } catch { message.error('创建失败'); }
+            };
+
+            const handleDelete = async (kbId) => {
+                try {
+                    await api.deleteKnowledge(currentOrg.id, kbId);
+                    await loadKnowledge();
+                    message.success('删除成功');
+                } catch { message.error('删除失败'); }
+            };
+
+            const filtered = knowledge.filter(kb =>
+                kb.title.toLowerCase().includes(searchText.toLowerCase()) ||
+                kb.content.toLowerCase().includes(searchText.toLowerCase())
+            );
+
+            const columns = [
+                { title: '标题', dataIndex: 'title' },
+                { title: '分类', dataIndex: 'category', render: (c) => c ? <Tag>{c}</Tag> : <Tag>未分类</Tag> },
+                { title: '标签', dataIndex: 'tags', render: (tags) => tags?.map(t => <Tag key={t} className="node-tag">{t}</Tag>) },
+                { title: '版本', dataIndex: 'version', render: (v) => <Tag>v{v}</Tag> },
+                {
+                    title: '操作',
+                    render: (_, record) => (
+                        <Space>
+                            <Button size="small" onClick={() => { setEditingKb(record); form.setFieldsValue(record); setIsModalOpen(true); }}>编辑</Button>
+                            <Popconfirm title="确定删除?" onConfirm={() => handleDelete(record.id)}>
+                                <Button size="small" danger>删除</Button>
+                            </Popconfirm>
+                        </Space>
+                    )
+                }
+            ];
+
+            if (!currentOrg) return <div className="empty-state"><Text type="secondary">请先选择一个组织</Text></div>;
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Space>
+                            <Title level={3} className="page-title">公有知识库</Title>
+                            <Input placeholder="搜索..." style={{ width: 200 }} value={searchText} onChange={(e) => setSearchText(e.target.value)} />
+                        </Space>
+                        <Button type="primary" onClick={() => { setEditingKb(null); form.resetFields(); setIsModalOpen(true); }}>+ 添加知识</Button>
+                    </div>
+                    <Table columns={columns} dataSource={filtered} rowKey="id" pagination={{ pageSize: 10 }} />
+
+                    <Modal
+                        title={editingKb ? '编辑知识' : '添加知识'}
+                        open={isModalOpen}
+                        onOk={() => form.submit()}
+                        onCancel={() => { setIsModalOpen(false); setEditingKb(null); }}
+                        width={700}
+                    >
+                        <Form form={form} onFinish={handleCreate} layout="vertical">
+                            <Form.Item name="title" label="标题" rules={[{ required: true }]}><Input /></Form.Item>
+                            <Form.Item name="category" label="分类">
+                                <Select allowClear>
+                                    <Option value="公司制度">公司制度</Option>
+                                    <Option value="产品文档">产品文档</Option>
+                                    <Option value="技术规范">技术规范</Option>
+                                    <Option value="运营流程">运营流程</Option>
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="tags" label="标签">
+                                <Select mode="tags" placeholder="输入后回车" />
+                            </Form.Item>
+                            <Form.Item name="content" label="内容" rules={[{ required: true }]}>
+                                <Input.TextArea rows={10} />
+                            </Form.Item>
+                        </Form>
+                    </Modal>
+                </div>
+            );
+        }
+
+        function SkillCenter() {
+            const [skills, setSkills] = useState([]);
+            const [clawhubSkills, setClawhubSkills] = useState([]);
+            const [searchText, setSearchText] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                loadSkills();
+            }, []);
+
+            const loadSkills = async () => {
+                setLoading(true);
+                try {
+                    const [installed, marketplace] = await Promise.all([
+                        api.listSkills(),
+                        api.searchSkills()
+                    ]);
+                    setSkills(installed);
+                    setClawhubSkills(marketplace);
+                } catch {}
+                setLoading(false);
+            };
+
+            const handleInstall = async (id) => {
+                try {
+                    await api.installSkill(id);
+                    await loadSkills();
+                    message.success('安装成功');
+                } catch { message.error('安装失败'); }
+            };
+
+            const handleUninstall = async (id) => {
+                try {
+                    await api.uninstallSkill(id);
+                    await loadSkills();
+                    message.success('卸载成功');
+                } catch { message.error('卸载失败'); }
+            };
+
+            const columns = [
+                { title: '技能名称', dataIndex: 'name' },
+                { title: '版本', dataIndex: 'version', render: (v) => <Tag>v{v}</Tag> },
+                { title: '描述', dataIndex: 'description', ellipsis: true },
+                { title: '作者', dataIndex: 'author', render: (a) => a || '未知' },
+                { title: '状态', dataIndex: 'installed', render: (i) => <Tag color={i ? 'green' : 'default'}>{i ? '已安装' : '未安装'}</Tag> },
+                {
+                    title: '操作',
+                    render: (_, record) => (
+                        <Space>
+                            {record.installed ? (
+                                <Button size="small" danger onClick={() => handleUninstall(record.id)}>卸载</Button>
+                            ) : (
+                                <Button size="small" type="primary" onClick={() => handleInstall(record.id)}>安装</Button>
+                            )}
+                        </Space>
+                    )
+                }
+            ];
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Title level={3} className="page-title">技能中心</Title>
+                        <Space>
+                            <Input
+                                placeholder="搜索技能..."
+                                style={{ width: 300 }}
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                onPressEnter={() => api.searchSkills(searchText).then(setClawhubSkills)}
+                            />
+                            <Button onClick={() => api.searchSkills(searchText).then(setClawhubSkills)}>搜索</Button>
+                        </Space>
+                    </div>
+
+                    <Tabs
+                        items={[
+                            {
+                                key: 'clawhub',
+                                label: `ClawHub 市场 (${clawhubSkills.length})`,
+                                children: <Table columns={columns} dataSource={clawhubSkills} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+                            },
+                            {
+                                key: 'installed',
+                                label: `已安装 (${skills.length})`,
+                                children: <Table columns={columns} dataSource={skills} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+                            }
+                        ]}
+                    />
+                </div>
+            );
+        }
+
+        function OrganizationSettings({ currentOrg, setCurrentOrg, orgs, setOrgs }) {
+            const [form] = Form.useForm();
+
+            useEffect(() => {
+                if (currentOrg) form.setFieldsValue(currentOrg);
+            }, [currentOrg]);
+
+            const handleSave = async (values) => {
+                try {
+                    const updated = await api.updateOrg(currentOrg.id, values);
+                    setOrgs(orgs.map(o => o.id === updated.id ? updated : o));
+                    setCurrentOrg(updated);
+                    message.success('保存成功');
+                } catch { message.error('保存失败'); }
+            };
+
+            const handleDeploy = async () => {
+                try {
+                    await api.deployOrg(currentOrg.id);
+                    message.success('部署成功');
+                } catch { message.error('部署失败'); }
+            };
+
+            if (!currentOrg) return <div className="empty-state"><Text type="secondary">请先选择一个组织</Text></div>;
+
+            return (
+                <div>
+                    <div className="page-header">
+                        <Title level={3} className="page-title">组织设置</Title>
+                        <Space>
+                            <Button onClick={() => form.submit()}>保存更改</Button>
+                            <Button type="primary" onClick={handleDeploy}>部署到 OpenClaw</Button>
+                        </Space>
+                    </div>
+                    <Card title="基本信息">
+                        <Form form={form} onFinish={handleSave} layout="vertical">
+                            <Form.Item name="name" label="组织名称" rules={[{ required: true }]}>
+                                <Input />
+                            </Form.Item>
+                            <Form.Item name="description" label="描述">
+                                <Input.TextArea rows={3} />
+                            </Form.Item>
+                        </Form>
+                    </Card>
+                    <Card title="部署状态" style={{ marginTop: 16 }}>
+                        <Space size="large">
+                            <div><Text type="secondary">当前状态</Text><br /><Text strong>{currentOrg.status?.toUpperCase()}</Text></div>
+                            <div><Text type="secondary">创建时间</Text><br /><Text>{new Date(currentOrg.created_at).toLocaleString()}</Text></div>
+                            <div><Text type="secondary">最后更新</Text><br /><Text>{new Date(currentOrg.updated_at).toLocaleString()}</Text></div>
+                        </Space>
+                    </Card>
+                </div>
+            );
+        }
+
+        function App() {
+            const [currentOrg, setCurrentOrg] = useState(null);
+            const [orgs, setOrgs] = useState([]);
+            const [roles, setRoles] = useState([]);
+            const [tasks, setTasks] = useState([]);
+            const [dataflows, setDataflows] = useState([]);
+            const [knowledge, setKnowledge] = useState([]);
+            const [activeMenu, setActiveMenu] = useState('dashboard');
+
+            useEffect(() => {
+                refreshOrgs();
+            }, []);
+
+            const refreshOrgs = async () => {
+                try {
+                    const data = await api.listOrgs();
+                    setOrgs(data);
+                    if (data.length > 0 && !currentOrg) setCurrentOrg(data[0]);
+                } catch {}
+            };
+
+            const menuItems = [
+                { key: 'dashboard', label: '组织概览' },
+                { key: 'roles', label: '角色管理' },
+                { key: 'tasks', label: '任务管理' },
+                { key: 'dataflows', label: '数据流设计' },
+                { key: 'knowledge', label: '知识库' },
+                { key: 'skills', label: '技能中心' },
+                { key: 'settings', label: '组织设置' }
+            ];
+
+            const renderContent = () => {
+                switch (activeMenu) {
+                    case 'dashboard': return <Dashboard currentOrg={currentOrg} setCurrentOrg={setCurrentOrg} orgs={orgs} setOrgs={setOrgs} refreshOrgs={refreshOrgs} roles={roles} tasks={tasks} />;
+                    case 'roles': return <RoleEditor currentOrg={currentOrg} roles={roles} setRoles={setRoles} tasks={tasks} />;
+                    case 'tasks': return <TaskEditor currentOrg={currentOrg} tasks={tasks} setTasks={setTasks} roles={roles} />;
+                    case 'dataflows': return <DataFlowEditor currentOrg={currentOrg} dataflows={dataflows} setDataflows={setDataflows} roles={roles} tasks={tasks} />;
+                    case 'knowledge': return <KnowledgeBase currentOrg={currentOrg} knowledge={knowledge} setKnowledge={setKnowledge} />;
+                    case 'skills': return <SkillCenter />;
+                    case 'settings': return <OrganizationSettings currentOrg={currentOrg} setCurrentOrg={setCurrentOrg} orgs={orgs} setOrgs={setOrgs} />;
+                    default: return null;
+                }
+            };
+
+            return (
+                <Layout style={{ minHeight: '100vh' }}>
+                    <Header style={{ display: 'flex', alignItems: 'center', padding: '0 24px', background: '#001529' }}>
+                        <span className="logo">🤖</span>
+                        <Title level={4} style={{ color: 'white', margin: 0 }}>ClawFlow</Title>
+                        <Text style={{ color: 'rgba(255,255,255,0.65)', marginLeft: 16 }}>Agent 组织动态构建平台</Text>
+                    </Header>
+                    <Layout>
+                        <Sider width={200} style={{ background: '#fff' }}>
+                            <Menu
+                                mode="inline"
+                                selectedKeys={[activeMenu]}
+                                onClick={(e) => setActiveMenu(e.key)}
+                                items={menuItems}
+                                style={{ height: '100%' }}
+                            />
+                        </Sider>
+                        <Content style={{ padding: '24px', minHeight: 280, background: '#fff' }}>
+                            {renderContent()}
+                        </Content>
+                    </Layout>
+                </Layout>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    {% endraw %}
+</body>
+</html>
