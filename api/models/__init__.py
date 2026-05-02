@@ -25,6 +25,19 @@ from api.models.rag_models import (
     SystemLoopStep
 )
 
+from api.models.memory import (
+    MemoryType,
+    MemoryEntry,
+    MemoryCompressionRequest,
+    MemoryCompressionResult,
+    MemoryResetRequest,
+    MemoryResetResult,
+    MemoryStats,
+    PromptEnhancementRequest,
+    PromptEnhancementResponse,
+    CompressionCallbackRequest
+)
+
 
 class OrganizationStatus(str, Enum):
     DRAFT = "draft"
@@ -66,15 +79,39 @@ class BaseModelWithDates(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
+class ComponentType(str, Enum):
+    HEADER = "header"
+    ROLE_LIST = "role_list"
+    TASK_LIST = "task_list"
+    KNOWLEDGE = "knowledge"
+    DATA_FLOW = "data_flow"
+    SKILL = "skill"
+    PROMPT = "prompt"
+    MEMORY = "memory"
+    CUSTOM = "custom"
+
+
+class OrgComponent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: ComponentType
+    position: Dict[str, float] = {"x": 0, "y": 0}
+    size: Dict[str, float] = {"width": 200, "height": 100}
+    config: Dict[str, Any] = {}
+    label: Optional[str] = None
+
+
 class Organization(BaseModelWithDates):
     name: str
     description: Optional[str] = None
     logo: Optional[str] = None
     status: OrganizationStatus = OrganizationStatus.DRAFT
+    initial_prompt: Optional[str] = None
+    input_role_id: Optional[str] = None
+    role_ids: List[str] = []
+    layout: List[OrgComponent] = []
 
 
 class Role(BaseModelWithDates):
-    organization_id: str
     name: str
     description: Optional[str] = None
     responsibilities: List[str] = []
@@ -84,13 +121,16 @@ class Role(BaseModelWithDates):
     hierarchy_level: int = 1
     soul_template: Optional[str] = None
     identity_template: Optional[str] = None
-    agents_config: Dict[str, Any] = {}
+    context_memory: Optional[str] = None
+    division: Optional[str] = None
+    source: Optional[str] = "manual"
 
 
 class Task(BaseModelWithDates):
     organization_id: str
     name: str
     description: Optional[str] = None
+    prompt: Optional[str] = None
     input_schema: Dict[str, Any] = {}
     output_schema: Dict[str, Any] = {}
     assigned_role_id: Optional[str] = None
@@ -142,6 +182,7 @@ class Skill(BaseModel):
     tags: List[str] = []
     installed: bool = False
     installed_at: Optional[datetime] = None
+    installed_roles: List[str] = []
     local_path: Optional[str] = None
 
 

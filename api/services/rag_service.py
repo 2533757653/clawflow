@@ -3,6 +3,7 @@ import json
 import time
 import re
 import math
+import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 
@@ -12,6 +13,8 @@ from api.models.rag_models import (
     RAGQuery, RAGResult, RAGResponse
 )
 from api.services.storage import StorageService
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentService:
@@ -105,6 +108,18 @@ class EmbeddingService:
         self.storage = StorageService[ChunkEmbedding](storage_path, ChunkEmbedding)
         self.model = model
         self._embedding_cache: Dict[str, List[float]] = {}
+        self._openai_client = None
+
+    def _get_openai_client(self):
+        if self._openai_client is None:
+            import os
+            from openai import OpenAI
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                logger.warning("OPENAI_API_KEY environment variable not set")
+                return None
+            self._openai_client = OpenAI(api_key=api_key)
+        return self._openai_client
 
     def get_embedding(self, text: str, use_cache: bool = True) -> List[float]:
         cache_key = text[:100]
@@ -119,17 +134,29 @@ class EmbeddingService:
         return embedding
 
     def _generate_embedding(self, text: str) -> List[float]:
-        norm = sum((ord(c) % 100) / 100 for c in text[:min(len(text), 100)])
+        client = self._get_openai_client()
+        if client:
+            try:
+                response = client.embeddings.create(
+                    model=self.model,
+                    input=text
+                )
+                return response.data[0].embedding
+            except Exception as e:
+                logger.warning(f"OpenAI API failed: {e}, using fallback")
+        return self._fallback_embedding(text)
+
+    def _fallback_embedding(self, text: str) -> List[float]:
+        words = text.lower().split()
         dim = 1536
-        embedding = []
-        for i in range(dim):
-            seed = (norm * 1000 + i * 7) % 100 / 100
-            embedding.append(math.sin(seed * math.pi))
-
-        magnitude = math.sqrt(sum(e ** 2 for e in embedding))
-        embedding = [e / magnitude for e in embedding]
-
-        return embedding
+        vector = [0.0] * dim
+        for word in words:
+            idx = hash(word) % dim
+            vector[idx] += 1
+        norm = math.sqrt(sum(v*v for v in vector))
+        if norm > 0:
+            vector = [v/norm for v in vector]
+        return vector
 
     def save(self, chunk_id: str, embedding: List[float]) -> ChunkEmbedding:
         chunk_emb = ChunkEmbedding(

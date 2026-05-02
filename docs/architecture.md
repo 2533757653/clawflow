@@ -56,7 +56,7 @@
 | 路由模块 | 路径前缀 | 功能 |
 |---------|----------|------|
 | organizations | `/api/v1/organizations` | 组织 CRUD |
-| roles | `/api/v1/organizations/{org_id}/roles` | 角色管理 |
+| roles | `/api/v1/roles` | 角色管理（全局） |
 | tasks | `/api/v1/organizations/{org_id}/tasks` | 任务管理 |
 | dataflows | `/api/v1/organizations/{org_id}/dataflows` | 数据流管理 |
 | knowledge | `/api/v1/organizations/{org_id}/knowledge` | 知识库管理 |

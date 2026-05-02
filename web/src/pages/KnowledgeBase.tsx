@@ -1,10 +1,13 @@
-import { Card, Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm } from 'antd'
-import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
-import { useEffect, useState } from 'react'
-import { useStore } from '../stores'
-import type { Knowledge } from '../types'
+import { Card, Table, Button, Space, Tag, Modal, Form, Input, Select, message, Popconfirm, Tabs } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined, ExperimentOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { useEffect, useState } from 'react';
+import { useStore } from '../stores';
+import type { Knowledge } from '../types';
+import SearchPanel from '../components/Knowledge/SearchPanel';
+import InjectionPreview from '../components/Knowledge/InjectionPreview';
+import IndexStatus from '../components/Knowledge/IndexStatus';
 
-const { TextArea } = Input
+const { TextArea } = Input;
 
 export default function KnowledgeBase() {
   const {
@@ -15,75 +18,76 @@ export default function KnowledgeBase() {
     updateKnowledge,
     deleteKnowledge,
     loading
-  } = useStore()
+  } = useStore();
 
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const [editingKnowledge, setEditingKnowledge] = useState<Knowledge | null>(null)
-  const [previewContent, setPreviewContent] = useState('')
-  const [searchText, setSearchText] = useState('')
-  const [form] = Form.useForm()
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [editingKnowledge, setEditingKnowledge] = useState<Knowledge | null>(null);
+  const [previewContent, setPreviewContent] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [form] = Form.useForm();
+  const [activeTab, setActiveTab] = useState('list');
 
   useEffect(() => {
     if (currentOrganizationId) {
-      loadKnowledge(currentOrganizationId)
+      loadKnowledge(currentOrganizationId);
     }
-  }, [currentOrganizationId, loadKnowledge])
+  }, [currentOrganizationId, loadKnowledge]);
 
   const handleCreate = async (values: Partial<Knowledge>) => {
     if (!currentOrganizationId) {
-      message.warning('请先选择一个组织')
-      return
+      message.warning('请先选择一个组织');
+      return;
     }
     try {
-      await createKnowledge(currentOrganizationId, values)
-      message.success('知识创建成功')
-      setIsModalOpen(false)
-      form.resetFields()
+      await createKnowledge(currentOrganizationId, values);
+      message.success('知识创建成功');
+      setIsModalOpen(false);
+      form.resetFields();
     } catch {
-      message.error('创建失败')
+      message.error('创建失败');
     }
-  }
+  };
 
   const handleUpdate = async (values: Partial<Knowledge>) => {
-    if (!currentOrganizationId || !editingKnowledge) return
+    if (!currentOrganizationId || !editingKnowledge) return;
     try {
-      await updateKnowledge(currentOrganizationId, editingKnowledge.id, values)
-      message.success('知识更新成功')
-      setIsModalOpen(false)
-      setEditingKnowledge(null)
-      form.resetFields()
+      await updateKnowledge(currentOrganizationId, editingKnowledge.id, values);
+      message.success('知识更新成功');
+      setIsModalOpen(false);
+      setEditingKnowledge(null);
+      form.resetFields();
     } catch {
-      message.error('更新失败')
+      message.error('更新失败');
     }
-  }
+  };
 
   const handleDelete = async (knowledgeId: string) => {
-    if (!currentOrganizationId) return
+    if (!currentOrganizationId) return;
     try {
-      await deleteKnowledge(currentOrganizationId, knowledgeId)
-      message.success('删除成功')
+      await deleteKnowledge(currentOrganizationId, knowledgeId);
+      message.success('删除成功');
     } catch {
-      message.error('删除失败')
+      message.error('删除失败');
     }
-  }
+  };
 
   const openEditModal = (kb: Knowledge) => {
-    setEditingKnowledge(kb)
-    form.setFieldsValue(kb)
-    setIsModalOpen(true)
-  }
+    setEditingKnowledge(kb);
+    form.setFieldsValue(kb);
+    setIsModalOpen(true);
+  };
 
   const openPreview = (kb: Knowledge) => {
-    setPreviewContent(kb.content)
-    setIsPreviewOpen(true)
-  }
+    setPreviewContent(kb.content);
+    setIsPreviewOpen(true);
+  };
 
   const filteredKnowledge = knowledge.filter(kb =>
     kb.title.toLowerCase().includes(searchText.toLowerCase()) ||
     kb.content.toLowerCase().includes(searchText.toLowerCase()) ||
     (kb.category && kb.category.toLowerCase().includes(searchText.toLowerCase()))
-  )
+  );
 
   const columns = [
     {
@@ -133,7 +137,7 @@ export default function KnowledgeBase() {
         </Space>
       )
     }
-  ]
+  ];
 
   if (!currentOrganizationId) {
     return (
@@ -142,50 +146,78 @@ export default function KnowledgeBase() {
           <h3>请先在「组织概览」中选择或创建一个组织</h3>
         </div>
       </Card>
-    )
+    );
   }
 
   return (
     <div>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-        <Space>
-          <h2 style={{ margin: 0 }}>公有知识库</h2>
-          <Input
-            placeholder="搜索知识..."
-            prefix={<SearchOutlined />}
-            style={{ width: 200 }}
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-          />
-        </Space>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setEditingKnowledge(null)
-            form.resetFields()
-            setIsModalOpen(true)
-          }}
-        >
-          添加知识
-        </Button>
-      </div>
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'list',
+            label: <span><DatabaseOutlined />知识列表</span>,
+            children: (
+              <>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+                  <Space>
+                    <Input
+                      placeholder="搜索知识..."
+                      prefix={<SearchOutlined />}
+                      style={{ width: 200 }}
+                      value={searchText}
+                      onChange={e => setSearchText(e.target.value)}
+                    />
+                  </Space>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      setEditingKnowledge(null);
+                      form.resetFields();
+                      setIsModalOpen(true);
+                    }}
+                  >
+                    添加知识
+                  </Button>
+                </div>
 
-      <Table
-        columns={columns}
-        dataSource={filteredKnowledge}
-        rowKey="id"
-        loading={loading.knowledge}
-        pagination={{ pageSize: 10 }}
+                <Table
+                  columns={columns}
+                  dataSource={filteredKnowledge}
+                  rowKey="id"
+                  loading={loading.knowledge}
+                  pagination={{ pageSize: 10 }}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'search',
+            label: <span><SearchOutlined />语义搜索</span>,
+            children: <SearchPanel orgId={currentOrganizationId} />,
+          },
+          {
+            key: 'preview',
+            label: <span><ExperimentOutlined />注入预览</span>,
+            children: <InjectionPreview orgId={currentOrganizationId} />,
+          },
+          {
+            key: 'status',
+            label: <span><DatabaseOutlined />索引状态</span>,
+            children: <IndexStatus orgId={currentOrganizationId} />,
+          },
+        ]}
       />
 
       <Modal
         title={editingKnowledge ? '编辑知识' : '添加知识'}
         open={isModalOpen}
         onCancel={() => {
-          setIsModalOpen(false)
-          setEditingKnowledge(null)
-          form.resetFields()
+          setIsModalOpen(false);
+          setEditingKnowledge(null);
+          form.resetFields();
         }}
         onOk={() => form.submit()}
         width={700}
@@ -236,5 +268,5 @@ export default function KnowledgeBase() {
         </div>
       </Modal>
     </div>
-  )
+  );
 }

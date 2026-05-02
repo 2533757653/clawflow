@@ -5,11 +5,7 @@ import type {
   Task,
   DataFlow,
   Knowledge,
-  Skill,
-  AgentSystem,
-  SystemLoopStep,
-  ExecutorUnit,
-  AvailableExecutors
+  Skill
 } from '../types';
 import {
   organizationApi,
@@ -18,8 +14,9 @@ import {
   dataflowApi,
   knowledgeApi,
   skillApi,
-  systemApi
+  ragApi,
 } from '../services/api';
+import type { RAGStats, SearchResult } from '../types';
 
 interface AppState {
   organizations: Organization[];
@@ -30,9 +27,8 @@ interface AppState {
   knowledge: Knowledge[];
   skills: Skill[];
   clawhubSkills: Skill[];
-  systems: AgentSystem[];
-  systemSteps: SystemLoopStep[];
-  availableExecutors: AvailableExecutors;
+  ragStats: RAGStats | null;
+  semanticSearchResults: SearchResult[];
 
   loading: {
     organizations: boolean;
@@ -41,7 +37,7 @@ interface AppState {
     dataflows: boolean;
     knowledge: boolean;
     skills: boolean;
-    systems: boolean;
+    rag: boolean;
   };
 
   setCurrentOrganization: (orgId: string | null) => void;
@@ -51,11 +47,13 @@ interface AppState {
   updateOrganization: (id: string, org: Partial<Organization>) => Promise<void>;
   deleteOrganization: (id: string) => Promise<void>;
   deployOrganization: (id: string) => Promise<void>;
+  startOrganization: (id: string) => Promise<void>;
+  stopOrganization: (id: string) => Promise<void>;
 
-  loadRoles: (orgId: string) => Promise<void>;
-  createRole: (orgId: string, role: Partial<Role>) => Promise<Role>;
-  updateRole: (orgId: string, roleId: string, role: Partial<Role>) => Promise<void>;
-  deleteRole: (orgId: string, roleId: string) => Promise<void>;
+  loadRoles: () => Promise<void>;
+  createRole: (role: Partial<Role>) => Promise<Role>;
+  updateRole: (roleId: string, role: Partial<Role>) => Promise<void>;
+  deleteRole: (roleId: string) => Promise<void>;
 
   loadTasks: (orgId: string) => Promise<void>;
   createTask: (orgId: string, task: Partial<Task>) => Promise<Task>;
@@ -76,20 +74,11 @@ interface AppState {
   searchClawhubSkills: (q?: string, tag?: string) => Promise<void>;
   installSkill: (skillId: string) => Promise<void>;
   uninstallSkill: (skillId: string) => Promise<void>;
+  installSkillToRole: (skillId: string, roleId: string) => Promise<void>;
 
-  loadSystems: (orgId: string) => Promise<void>;
-  createSystem: (orgId: string, system: Partial<AgentSystem>) => Promise<AgentSystem>;
-  updateSystem: (orgId: string, systemId: string, system: Partial<AgentSystem>) => Promise<void>;
-  deleteSystem: (orgId: string, systemId: string) => Promise<void>;
-  setSystemDecider: (orgId: string, systemId: string, executor: ExecutorUnit) => Promise<void>;
-  addSystemActor: (orgId: string, systemId: string, executor: ExecutorUnit) => Promise<void>;
-  removeSystemActor: (orgId: string, systemId: string, actorIdx: number) => Promise<void>;
-  setSystemFeedbacker: (orgId: string, systemId: string, executor: ExecutorUnit) => Promise<void>;
-  startSystem: (orgId: string, systemId: string) => Promise<void>;
-  stopSystem: (orgId: string, systemId: string) => Promise<void>;
-  executeSystemLoop: (orgId: string, systemId: string) => Promise<void>;
-  loadSystemSteps: (orgId: string, systemId: string) => Promise<void>;
-  loadAvailableExecutors: (orgId: string) => Promise<void>;
+  loadRagStats: () => Promise<void>;
+  semanticSearch: (query: string, orgId: string, topK?: number) => Promise<SearchResult[]>;
+  reindexKnowledgeBase: (orgId: string) => Promise<{ knowledge_count: number; total_chunks: number }>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -101,9 +90,8 @@ export const useStore = create<AppState>((set, get) => ({
   knowledge: [],
   skills: [],
   clawhubSkills: [],
-  systems: [],
-  systemSteps: [],
-  availableExecutors: { roles: [], systems: [] },
+  ragStats: null,
+  semanticSearchResults: [],
 
   loading: {
     organizations: false,
@@ -112,18 +100,21 @@ export const useStore = create<AppState>((set, get) => ({
     dataflows: false,
     knowledge: false,
     skills: false,
-    systems: false,
+    rag: false,
   },
 
   setCurrentOrganization: (orgId) => {
-    set({ currentOrganizationId: orgId });
+    set({
+      currentOrganizationId: orgId,
+      tasks: [],
+      dataflows: [],
+      knowledge: [],
+    });
+
     if (orgId) {
-      get().loadRoles(orgId);
       get().loadTasks(orgId);
       get().loadDataflows(orgId);
       get().loadKnowledge(orgId);
-      get().loadSystems(orgId);
-      get().loadAvailableExecutors(orgId);
     }
   },
 
@@ -165,32 +156,42 @@ export const useStore = create<AppState>((set, get) => ({
     await get().loadOrganizations();
   },
 
-  loadRoles: async (orgId) => {
+  startOrganization: async (id) => {
+    await organizationApi.start(id);
+    await get().loadOrganizations();
+  },
+
+  stopOrganization: async (id) => {
+    await organizationApi.stop(id);
+    await get().loadOrganizations();
+  },
+
+  loadRoles: async () => {
     set((state) => ({ ...state, loading: { ...state.loading, roles: true } }));
     try {
-      const data = await roleApi.list(orgId);
+      const data = await roleApi.list();
       set((state) => ({ ...state, roles: data, loading: { ...state.loading, roles: false } }));
     } catch {
       set((state) => ({ ...state, loading: { ...state.loading, roles: false } }));
     }
   },
 
-  createRole: async (orgId, role) => {
-    const created = await roleApi.create(orgId, role);
+  createRole: async (role) => {
+    const created = await roleApi.create(role);
     set((state) => ({ ...state, roles: [...state.roles, created] }));
     return created;
   },
 
-  updateRole: async (orgId, roleId, role) => {
-    const updated = await roleApi.update(orgId, roleId, role);
+  updateRole: async (roleId, role) => {
+    const updated = await roleApi.update(roleId, role);
     set((state) => ({
       ...state,
       roles: state.roles.map((r) => (r.id === roleId ? updated : r))
     }));
   },
 
-  deleteRole: async (orgId, roleId) => {
-    await roleApi.delete(orgId, roleId);
+  deleteRole: async (roleId) => {
+    await roleApi.delete(roleId);
     set((state) => ({
       ...state,
       roles: state.roles.filter((r) => r.id !== roleId)
@@ -201,7 +202,11 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ ...state, loading: { ...state.loading, tasks: true } }));
     try {
       const data = await taskApi.list(orgId);
-      set((state) => ({ ...state, tasks: data, loading: { ...state.loading, tasks: false } }));
+      set((state) => ({
+        ...state,
+        ...(state.currentOrganizationId === orgId ? { tasks: data } : {}),
+        loading: { ...state.loading, tasks: false }
+      }));
     } catch {
       set((state) => ({ ...state, loading: { ...state.loading, tasks: false } }));
     }
@@ -233,7 +238,11 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ ...state, loading: { ...state.loading, dataflows: true } }));
     try {
       const data = await dataflowApi.list(orgId);
-      set((state) => ({ ...state, dataflows: data, loading: { ...state.loading, dataflows: false } }));
+      set((state) => ({
+        ...state,
+        ...(state.currentOrganizationId === orgId ? { dataflows: data } : {}),
+        loading: { ...state.loading, dataflows: false }
+      }));
     } catch {
       set((state) => ({ ...state, loading: { ...state.loading, dataflows: false } }));
     }
@@ -265,7 +274,11 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({ ...state, loading: { ...state.loading, knowledge: true } }));
     try {
       const data = await knowledgeApi.list(orgId);
-      set((state) => ({ ...state, knowledge: data, loading: { ...state.loading, knowledge: false } }));
+      set((state) => ({
+        ...state,
+        ...(state.currentOrganizationId === orgId ? { knowledge: data } : {}),
+        loading: { ...state.loading, knowledge: false }
+      }));
     } catch {
       set((state) => ({ ...state, loading: { ...state.loading, knowledge: false } }));
     }
@@ -326,81 +339,52 @@ export const useStore = create<AppState>((set, get) => ({
     await get().loadSkills();
   },
 
-  loadSystems: async (orgId) => {
-    set((state) => ({ ...state, loading: { ...state.loading, systems: true } }));
+  installSkillToRole: async (skillId, roleId) => {
+    await skillApi.installToRole(skillId, roleId);
+    await get().loadSkills();
+  },
+
+  loadRagStats: async () => {
+    set((state) => ({ ...state, loading: { ...state.loading, rag: true } }));
     try {
-      const data = await systemApi.list(orgId);
-      set((state) => ({ ...state, systems: data, loading: { ...state.loading, systems: false } }));
+      const stats = await ragApi.getStats();
+      set((state) => ({ ...state, ragStats: stats, loading: { ...state.loading, rag: false } }));
     } catch {
-      set((state) => ({ ...state, loading: { ...state.loading, systems: false } }));
+      set((state) => ({ ...state, loading: { ...state.loading, rag: false } }));
     }
   },
 
-  createSystem: async (orgId, system) => {
-    const created = await systemApi.create(orgId, system);
-    set((state) => ({ ...state, systems: [...state.systems, created] }));
-    return created;
+  semanticSearch: async (query, orgId, topK = 5) => {
+    set((state) => ({ ...state, loading: { ...state.loading, rag: true } }));
+    try {
+      const response = await ragApi.query({
+        query,
+        top_k: topK,
+        organization_id: orgId,
+        doc_types: ['knowledge']
+      });
+      const results: SearchResult[] = response.results.map(r => ({
+        id: r.chunk_id,
+        content: r.content,
+        score: r.score,
+        source: (r.metadata?.title as string) || 'Unknown'
+      }));
+      set((state) => ({ ...state, semanticSearchResults: results, loading: { ...state.loading, rag: false } }));
+      return results;
+    } catch {
+      set((state) => ({ ...state, loading: { ...state.loading, rag: false } }));
+      return [];
+    }
   },
 
-  updateSystem: async (orgId, systemId, system) => {
-    const updated = await systemApi.update(orgId, systemId, system);
-    set((state) => ({
-      ...state,
-      systems: state.systems.map((s) => (s.id === systemId ? updated : s))
-    }));
-  },
-
-  deleteSystem: async (orgId, systemId) => {
-    await systemApi.delete(orgId, systemId);
-    set((state) => ({
-      ...state,
-      systems: state.systems.filter((s) => s.id !== systemId)
-    }));
-  },
-
-  setSystemDecider: async (orgId, systemId, executor) => {
-    await systemApi.setDecider(orgId, systemId, executor);
-    await get().loadSystems(orgId);
-  },
-
-  addSystemActor: async (orgId, systemId, executor) => {
-    await systemApi.addActor(orgId, systemId, executor);
-    await get().loadSystems(orgId);
-  },
-
-  removeSystemActor: async (orgId, systemId, actorIdx) => {
-    await systemApi.removeActor(orgId, systemId, actorIdx);
-    await get().loadSystems(orgId);
-  },
-
-  setSystemFeedbacker: async (orgId, systemId, executor) => {
-    await systemApi.setFeedbacker(orgId, systemId, executor);
-    await get().loadSystems(orgId);
-  },
-
-  startSystem: async (orgId, systemId) => {
-    await systemApi.start(orgId, systemId);
-    await get().loadSystems(orgId);
-  },
-
-  stopSystem: async (orgId, systemId) => {
-    await systemApi.stop(orgId, systemId);
-    await get().loadSystems(orgId);
-  },
-
-  executeSystemLoop: async (orgId, systemId) => {
-    await systemApi.executeLoop(orgId, systemId);
-    await get().loadSystemSteps(orgId, systemId);
-    await get().loadSystems(orgId);
-  },
-
-  loadSystemSteps: async (orgId, systemId) => {
-    const data = await systemApi.getSteps(orgId, systemId);
-    set((state) => ({ ...state, systemSteps: data }));
-  },
-
-  loadAvailableExecutors: async (orgId) => {
-    const data = await systemApi.getAvailableExecutors(orgId);
-    set((state) => ({ ...state, availableExecutors: data }));
+  reindexKnowledgeBase: async (orgId) => {
+    set((state) => ({ ...state, loading: { ...state.loading, rag: true } }));
+    try {
+      const result = await ragApi.indexKnowledgeBase(orgId);
+      await get().loadRagStats();
+      return result;
+    } finally {
+      set((state) => ({ ...state, loading: { ...state.loading, rag: false } }));
+    }
   },
 }));

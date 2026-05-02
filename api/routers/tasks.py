@@ -1,7 +1,10 @@
+import logging
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 from api.models import Task, Priority, ExecutionMode
 from api.services import StorageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -22,7 +25,9 @@ async def create_task(org_id: str, task: Task):
     task.priority = task.priority or Priority.MEDIUM
     task.execution_mode = task.execution_mode or ExecutionMode.SEQUENTIAL
     storage = get_task_storage(org_id)
-    return storage.save(task)
+    saved = storage.save(task)
+    logger.info(f"Created task: {task.name} (id={saved.id}) in org={org_id}")
+    return saved
 
 
 @router.get("/{org_id}/tasks/{task_id}", response_model=Task)
@@ -42,7 +47,9 @@ async def update_task(org_id: str, task_id: str, task: Task):
         raise HTTPException(status_code=404, detail="Task not found")
     task.id = task_id
     task.organization_id = org_id
-    return storage.save(task)
+    saved = storage.save(task)
+    logger.info(f"Updated task: {task.name} (id={task_id}) in org={org_id}")
+    return saved
 
 
 @router.delete("/{org_id}/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -50,6 +57,7 @@ async def delete_task(org_id: str, task_id: str):
     storage = get_task_storage(org_id)
     if not storage.delete(task_id):
         raise HTTPException(status_code=404, detail="Task not found")
+    logger.info(f"Deleted task: id={task_id} from org={org_id}")
 
 
 @router.get("/{org_id}/tasks/{task_id}/dependencies")

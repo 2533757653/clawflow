@@ -9,12 +9,19 @@ import type {
   RoleHierarchy,
   TaskDependency,
   DeployResult,
-  AgentSystem,
-  SystemLoopStep,
-  ExecutorUnit,
-  AvailableExecutors,
-  GenerateRequest,
-  GenerateResponse
+  MemoryEntry,
+  MemoryCompressionResponse,
+  MemoryStats,
+  PromptEnhancementResponse,
+  RAGQuery,
+  RAGResponse,
+  RAGStats,
+  AgencyStatus,
+  AgencyAgentPreview,
+  AgencyImportRequest,
+  AgencyImportResponse,
+  PromptInjectionRequest,
+  PromptInjectionResponse,
 } from '../types';
 
 const api = axios.create({
@@ -36,26 +43,28 @@ export const organizationApi = {
 
   deploy: (id: string) => api.post<DeployResult>(`/organizations/${id}/deploy`).then(res => res.data),
 
-  undeploy: (id: string) => api.post(`/organizations/${id}/undeploy`),
+  start: (id: string) => api.post(`/organizations/${id}/start`),
+
+  stop: (id: string) => api.post(`/organizations/${id}/stop`),
 };
 
 export const roleApi = {
-  list: (orgId: string) => api.get<Role[]>(`/organizations/${orgId}/roles`).then(res => res.data),
+  list: () => api.get<Role[]>('/roles').then(res => res.data),
 
-  create: (orgId: string, role: Partial<Role>) =>
-    api.post<Role>(`/organizations/${orgId}/roles`, role).then(res => res.data),
+  create: (role: Partial<Role>) =>
+    api.post<Role>('/roles', role).then(res => res.data),
 
-  get: (orgId: string, roleId: string) =>
-    api.get<Role>(`/organizations/${orgId}/roles/${roleId}`).then(res => res.data),
+  get: (roleId: string) =>
+    api.get<Role>(`/roles/${roleId}`).then(res => res.data),
 
-  update: (orgId: string, roleId: string, role: Partial<Role>) =>
-    api.put<Role>(`/organizations/${orgId}/roles/${roleId}`, role).then(res => res.data),
+  update: (roleId: string, role: Partial<Role>) =>
+    api.put<Role>(`/roles/${roleId}`, role).then(res => res.data),
 
-  delete: (orgId: string, roleId: string) =>
-    api.delete(`/organizations/${orgId}/roles/${roleId}`),
+  delete: (roleId: string) =>
+    api.delete(`/roles/${roleId}`),
 
-  getHierarchy: (orgId: string, roleId: string) =>
-    api.get<RoleHierarchy>(`/organizations/${orgId}/roles/${roleId}/hierarchy`).then(res => res.data),
+  getHierarchy: (roleId: string) =>
+    api.get<RoleHierarchy>(`/roles/${roleId}/hierarchy`).then(res => res.data),
 };
 
 export const taskApi = {
@@ -110,6 +119,14 @@ export const knowledgeApi = {
 
   search: (orgId: string, q: string) =>
     api.get<Knowledge[]>(`/organizations/${orgId}/knowledge/search?q=${encodeURIComponent(q)}`).then(res => res.data),
+
+  injectPrompt: (orgId: string, request: PromptInjectionRequest) =>
+    api.post<PromptInjectionResponse>(`/organizations/${orgId}/knowledge/inject`, request).then(res => res.data),
+
+  injectSingleKnowledge: (orgId: string, knowledgeId: string, basePrompt: string) =>
+    api.post<PromptInjectionResponse>(
+      `/organizations/${orgId}/knowledge/inject/${knowledgeId}?base_prompt=${encodeURIComponent(basePrompt)}`
+    ).then(res => res.data),
 };
 
 export const skillApi = {
@@ -130,52 +147,86 @@ export const skillApi = {
 
   uninstall: (skillId: string) =>
     api.delete(`/skills/${skillId}/uninstall`),
+
+  installToRole: (skillId: string, roleId: string) =>
+    api.post<Skill>(`/skills/${skillId}/install`, { role_id: roleId }).then(res => res.data),
+
+  uninstallSkillFromRole: (skillId: string, roleId: string) =>
+    api.delete(`/skills/${skillId}/uninstall/${roleId}`),
+
+  getRoleSkills: (roleId: string) =>
+    api.get<Skill[]>(`/skills/role/${roleId}`).then(res => res.data),
 };
 
-export const systemApi = {
-  list: (orgId: string) => api.get<AgentSystem[]>(`/organizations/${orgId}/systems`).then(res => res.data),
+export const memoryApi = {
+  getRoleMemories: (roleId: string) =>
+    api.get<MemoryEntry[]>(`/memory/${roleId}`).then(res => res.data),
 
-  create: (orgId: string, system: Partial<AgentSystem>) =>
-    api.post<AgentSystem>(`/organizations/${orgId}/systems`, system).then(res => res.data),
+  addMemory: (roleId: string, content: string, memoryType?: string) =>
+    api.post<MemoryEntry>(`/memory/${roleId}`, null, {
+      params: { content, memory_type: memoryType || 'conversation' }
+    }).then(res => res.data),
 
-  get: (orgId: string, systemId: string) =>
-    api.get<AgentSystem>(`/organizations/${orgId}/systems/${systemId}`).then(res => res.data),
+  updateMemory: (roleId: string, memoryId: string, content: string) =>
+    api.put<MemoryEntry>(`/memory/${roleId}/${memoryId}`, null, { params: { content } }).then(res => res.data),
 
-  update: (orgId: string, systemId: string, system: Partial<AgentSystem>) =>
-    api.put<AgentSystem>(`/organizations/${orgId}/systems/${systemId}`, system).then(res => res.data),
+  deleteMemory: (roleId: string, memoryId: string) =>
+    api.delete(`/memory/${roleId}/${memoryId}`),
 
-  delete: (orgId: string, systemId: string) =>
-    api.delete(`/organizations/${orgId}/systems/${systemId}`),
+  accessMemory: (roleId: string, memoryId: string) =>
+    api.post<MemoryEntry>(`/memory/${roleId}/access/${memoryId}`).then(res => res.data),
 
-  setDecider: (orgId: string, systemId: string, executor: ExecutorUnit) =>
-    api.post<AgentSystem>(`/organizations/${orgId}/systems/${systemId}/decider`, executor).then(res => res.data),
+  compressMemories: (roleId: string, maxEntries: number = 10, compressionPrompt?: string) =>
+    api.post<MemoryCompressionResponse>(`/memory/compress`, {
+      role_id: roleId,
+      max_entries: maxEntries,
+      compression_prompt: compressionPrompt
+    }).then(res => res.data),
 
-  addActor: (orgId: string, systemId: string, executor: ExecutorUnit) =>
-    api.post<AgentSystem>(`/organizations/${orgId}/systems/${systemId}/actors`, executor).then(res => res.data),
+  resetMemories: (roleId: string, keepTypes?: string[]) =>
+    api.post(`/memory/reset`, {
+      role_id: roleId,
+      keep_types: keepTypes || ['fact', 'preference']
+    }).then(res => res.data),
 
-  removeActor: (orgId: string, systemId: string, actorIdx: number) =>
-    api.delete(`/organizations/${orgId}/systems/${systemId}/actors/${actorIdx}`),
+  getMemoryStats: (roleId: string) =>
+    api.get<MemoryStats>(`/memory/${roleId}/stats`).then(res => res.data),
 
-  setFeedbacker: (orgId: string, systemId: string, executor: ExecutorUnit) =>
-    api.post<AgentSystem>(`/organizations/${orgId}/systems/${systemId}/feedbacker`, executor).then(res => res.data),
+  enhancePromptWithMemory: (roleId: string, basePrompt: string, maxMemoryItems: number = 3) =>
+    api.post<PromptEnhancementResponse>(`/memory/enhance-prompt`, {
+      role_id: roleId,
+      base_prompt: basePrompt,
+      max_memory_items: maxMemoryItems
+    }).then(res => res.data),
 
-  start: (orgId: string, systemId: string) =>
-    api.post<AgentSystem>(`/organizations/${orgId}/systems/${systemId}/start`).then(res => res.data),
-
-  stop: (orgId: string, systemId: string) =>
-    api.post<AgentSystem>(`/organizations/${orgId}/systems/${systemId}/stop`).then(res => res.data),
-
-  executeLoop: (orgId: string, systemId: string) =>
-    api.post<SystemLoopStep>(`/organizations/${orgId}/systems/${systemId}/loop`).then(res => res.data),
-
-  getSteps: (orgId: string, systemId: string) =>
-    api.get<SystemLoopStep[]>(`/organizations/${orgId}/systems/${systemId}/steps`).then(res => res.data),
-
-  getAvailableExecutors: (orgId: string) =>
-    api.get<AvailableExecutors>(`/organizations/${orgId}/available-executors`).then(res => res.data),
+  syncToOpenClaw: (roleId: string, roleName?: string) =>
+    api.post(`/memory/${roleId}/sync`, null, { params: { role_name: roleName } }).then(res => res.data),
 };
 
-export const generatorApi = {
-  generate: (req: GenerateRequest) =>
-    api.post<GenerateResponse>('/generator/generate', req).then(res => res.data),
+export const ragApi = {
+  query: (ragQuery: RAGQuery) =>
+    api.post<RAGResponse>('/rag/query', ragQuery).then(res => res.data),
+
+  indexKnowledgeBase: (orgId: string) =>
+    api.post<{ knowledge_count: number; total_chunks: number }>(`/rag/index/knowledge-base/${orgId}`).then(res => res.data),
+
+  getStats: () =>
+    api.get<RAGStats>('/rag/stats').then(res => res.data),
+};
+
+export const agencyApi = {
+  getStatus: () =>
+    api.get<AgencyStatus>('/agency/status').then(res => res.data),
+
+  getDivisions: () =>
+    api.get<string[]>('/agency/divisions').then(res => res.data),
+
+  getDivisionAgents: (division: string) =>
+    api.get<AgencyAgentPreview[]>(`/agency/divisions/${division}/agents`).then(res => res.data),
+
+  importAgents: (request?: AgencyImportRequest) =>
+    api.post<AgencyImportResponse>('/agency/import', request || {}).then(res => res.data),
+
+  syncRepo: () =>
+    api.post('/agency/sync').then(res => res.data),
 };

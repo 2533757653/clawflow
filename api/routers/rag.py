@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
 from api.models.rag_models import (
@@ -5,6 +6,8 @@ from api.models.rag_models import (
     Chunk, RAGQuery, RAGResponse, RAGResult
 )
 from api.services.rag_service import RAGService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 rag_service = RAGService()
@@ -21,7 +24,9 @@ async def list_documents(
 @router.post("/documents", response_model=Document, status_code=status.HTTP_201_CREATED)
 async def create_document(doc: Document):
     doc.status = DocumentStatus.PENDING
-    return rag_service.doc_service.save(doc)
+    saved = rag_service.doc_service.save(doc)
+    logger.info(f"Created document: {doc.title} (id={saved.id})")
+    return saved
 
 
 @router.get("/documents/{doc_id}", response_model=Document)
@@ -37,6 +42,7 @@ async def delete_document(doc_id: str):
     rag_service.chunk_service.delete_by_document(doc_id)
     if not rag_service.doc_service.delete(doc_id):
         raise HTTPException(status_code=404, detail="Document not found")
+    logger.info(f"Deleted document: id={doc_id}")
 
 
 @router.post("/documents/{doc_id}/index")
@@ -46,6 +52,7 @@ async def index_document(doc_id: str, chunk_size: int = 500, overlap: int = 50):
         raise HTTPException(status_code=404, detail="Document not found")
 
     chunks = rag_service.index_document(doc, chunk_size, overlap)
+    logger.info(f"Indexed document: id={doc_id}, chunks={len(chunks)}")
     return {
         "message": "Document indexed successfully",
         "document_id": doc_id,
@@ -60,7 +67,9 @@ async def get_document_chunks(doc_id: str):
 
 @router.post("/query", response_model=RAGResponse)
 async def query_rag(rag_query: RAGQuery):
-    return rag_service.query(rag_query)
+    results = rag_service.query(rag_query)
+    logger.info(f"RAG query: {rag_query.query!r}, org={rag_query.organization_id}, results={len(results.results)}")
+    return results
 
 
 @router.post("/query/simple")
@@ -70,7 +79,9 @@ async def simple_query(query: str, top_k: int = 5, organization_id: Optional[str
         top_k=top_k,
         organization_id=organization_id
     )
-    return rag_service.query(rag_query)
+    results = rag_service.query(rag_query)
+    logger.info(f"Simple RAG query: {query!r}, results={len(results.results)}")
+    return results
 
 
 @router.post("/index/knowledge-base/{org_id}")

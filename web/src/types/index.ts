@@ -4,13 +4,36 @@ export interface Organization {
   description?: string;
   logo?: string;
   status: 'draft' | 'deployed' | 'running' | 'stopped';
+  initial_prompt?: string;
+  input_role_id?: string;
+  role_ids: string[];
+  layout: OrgComponent[];
   created_at: string;
   updated_at: string;
 }
 
+export type ComponentType =
+  | 'header'
+  | 'role_list'
+  | 'task_list'
+  | 'knowledge'
+  | 'data_flow'
+  | 'skill'
+  | 'prompt'
+  | 'memory'
+  | 'custom';
+
+export interface OrgComponent {
+  id: string;
+  type: ComponentType;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  config: Record<string, unknown>;
+  label?: string;
+}
+
 export interface Role {
   id: string;
-  organization_id: string;
   name: string;
   description?: string;
   responsibilities: string[];
@@ -20,7 +43,9 @@ export interface Role {
   hierarchy_level: number;
   soul_template?: string;
   identity_template?: string;
-  agents_config: Record<string, unknown>;
+  context_memory?: string;
+  division?: string;
+  source?: string;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +55,7 @@ export interface Task {
   organization_id: string;
   name: string;
   description?: string;
+  prompt?: string;
   input_schema: Record<string, unknown>;
   output_schema: Record<string, unknown>;
   assigned_role_id?: string;
@@ -89,6 +115,7 @@ export interface Skill {
   tags: string[];
   installed: boolean;
   installed_at?: string;
+  installed_roles: string[];
   local_path?: string;
 }
 
@@ -122,102 +149,132 @@ export interface DeployResult {
   total_roles: number;
 }
 
-export type ExecutorType = 'role' | 'system';
+// ─── Memory ───────────────────────────────────────────────────────────────────
 
-export interface ExecutorUnit {
-  type: ExecutorType;
-  role_id?: string;
-  system_id?: string;
-  depth: number;
-  name?: string;
-}
+export type MemoryType = 'conversation' | 'fact' | 'preference' | 'context' | 'compressed';
 
-export interface SystemNode {
+export interface MemoryEntry {
+  id: string;
   role_id: string;
-  role_type: 'decider' | 'actor' | 'feedbacker';
-  config: Record<string, unknown>;
-}
-
-export interface SystemEdge {
-  source_id: string;
-  target_id: string;
-  edge_type: string;
-  data_mapping: Record<string, unknown>;
-}
-
-export interface AgentSystem {
-  id: string;
-  organization_id: string;
-  name: string;
-  description?: string;
-  decider?: ExecutorUnit;
-  actors: ExecutorUnit[];
-  feedbacker?: ExecutorUnit;
-  nodes: SystemNode[];
-  edges: SystemEdge[];
-  state: 'initialized' | 'running' | 'stopped' | 'terminated';
-  loop_count: number;
-  max_loops?: number;
-  max_depth: number;
+  content: string;
+  memory_type: MemoryType;
   created_at: string;
-  updated_at: string;
+  access_count: number;
+  last_accessed: string | null;
+  importance: number;
+  tags?: string[];
+  parent_id?: string;
+  is_compressed?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
-export interface SystemLoopStep {
+export interface MemoryCompressionResponse {
+  original_count: number;
+  compressed_count: number;
+  compressed_entries: MemoryEntry[];
+  removed_entries: string[];
+  summary?: string;
+}
+
+export interface MemoryStats {
+  total_entries: number;
+  by_type: Record<string, number>;
+  average_importance: number;
+  most_accessed: MemoryEntry[];
+  oldest_entry: string | null;
+  newest_entry: string | null;
+}
+
+export interface PromptEnhancementResponse {
+  enhanced_prompt: string;
+  memory_used: {
+    id: string;
+    preview: string;
+    importance: number;
+  }[];
+}
+
+// ─── RAG ──────────────────────────────────────────────────────────────────────
+
+export interface RAGQuery {
+  query: string;
+  top_k: number;
+  organization_id?: string;
+  doc_types?: string[];
+}
+
+export interface RAGResult {
+  chunk_id: string;
+  document_id: string;
+  content: string;
+  score: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface RAGResponse {
+  query: string;
+  results: RAGResult[];
+  total_chunks: number;
+  processing_time_ms: number;
+}
+
+export interface RAGStats {
+  total_documents: number;
+  total_chunks: number;
+  total_embeddings: number;
+  documents_by_status: Record<string, number>;
+}
+
+export interface SearchResult {
   id: string;
-  system_id: string;
-  step_index: number;
-  phase: string;
-  depth: number;
-  executor_type?: string;
-  executor_name?: string;
-  decider_output?: Record<string, unknown>;
-  actor_output?: Record<string, unknown>;
-  feedbacker_output?: Record<string, unknown>;
-  terminated: boolean;
-  termination_reason?: string;
-  child_steps: SystemLoopStep[];
-  created_at: string;
+  content: string;
+  score: number;
+  source: string;
 }
 
-export interface AvailableExecutors {
-  roles: { id: string; name: string; type: 'role' }[];
-  systems: { id: string; name: string; type: 'system' }[];
+// ─── Knowledge ────────────────────────────────────────────────────────────────
+
+export interface PromptInjectionRequest {
+  base_prompt: string;
+  include_knowledge: boolean;
+  max_knowledge_items: number;
 }
 
-export interface GeneratedRole {
+export interface PromptInjectionResponse {
+  enhanced_prompt: string;
+  knowledge_used: {
+    id: string;
+    title: string;
+    category: string;
+    preview: string;
+  }[];
+}
+
+// ─── Agency ───────────────────────────────────────────────────────────────────
+
+export interface AgencyImportRequest {
+  divisions?: string[];
+  agent_names?: string[];
+}
+
+export interface AgencyImportResponse {
+  imported_count: number;
+  skipped_count: number;
+  roles: Role[];
+  errors: string[];
+}
+
+export interface AgencyStatus {
+  is_cloned: boolean;
+  is_updated: boolean;
+  repo_path: string;
+  divisions_count: number;
+  divisions: string[];
+}
+
+export interface AgencyAgentPreview {
   name: string;
+  specialty: string;
   description: string;
-  responsibilities: string[];
-  role_type: string;
-  hierarchy_level: number;
-}
-
-export interface GeneratedActor {
-  name: string;
-  is_nested_system: boolean;
-  nested_roles: GeneratedRole[];
-  is_group: boolean;
-  group_members: string[];
-}
-
-export interface GeneratedSystem {
-  name: string;
-  description: string;
-  template_type: 'simple' | 'hierarchical' | 'parallel';
-  decider: GeneratedRole;
-  actors: GeneratedActor[];
-  feedbacker: GeneratedRole;
-  nested_systems: GeneratedSystem[];
-}
-
-export interface GenerateRequest {
-  description: string;
-  org_id?: string;
-}
-
-export interface GenerateResponse {
-  roles: GeneratedRole[];
-  systems: GeneratedSystem[];
-  suggestions: string[];
+  division: string;
 }

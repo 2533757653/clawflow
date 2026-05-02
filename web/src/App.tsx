@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { Layout, Menu, Typography, theme } from 'antd'
 import {
   AppstoreOutlined,
@@ -8,7 +8,8 @@ import {
   ToolOutlined,
   RocketOutlined,
   SettingOutlined,
-  AimOutlined
+  PlayCircleOutlined,
+  HistoryOutlined
 } from '@ant-design/icons'
 import { useEffect } from 'react'
 import { useStore } from './stores'
@@ -19,13 +20,16 @@ import DataFlowEditor from './pages/DataFlowEditor'
 import KnowledgeBase from './pages/KnowledgeBase'
 import SkillCenter from './pages/SkillCenter'
 import OrganizationEditor from './pages/OrganizationEditor'
-import SystemEditor from './pages/SystemEditor'
+import ExecutionResultPage from './pages/ExecutionResult'
+import MemoryManager from './pages/MemoryManager'
 
 const { Header, Sider, Content } = Layout
 const { Title } = Typography
 
 function App() {
-  const { loadOrganizations, loadSkills } = useStore()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { loadOrganizations, loadSkills, loadRoles } = useStore()
   const {
     token: { colorBgContainer, borderRadiusLG }
   } = theme.useToken()
@@ -33,7 +37,8 @@ function App() {
   useEffect(() => {
     loadOrganizations()
     loadSkills()
-  }, [loadOrganizations, loadSkills])
+    loadRoles()
+  }, [loadOrganizations, loadSkills, loadRoles])
 
   const menuItems = [
     {
@@ -62,11 +67,6 @@ function App() {
       label: '数据流设计'
     },
     {
-      key: '/systems',
-      icon: <AimOutlined />,
-      label: '决策系统'
-    },
-    {
       key: '/knowledge',
       icon: <DatabaseOutlined />,
       label: '知识库'
@@ -75,8 +75,20 @@ function App() {
       key: '/skills',
       icon: <ToolOutlined />,
       label: '技能中心'
+    },
+    {
+      key: '/execution',
+      icon: <PlayCircleOutlined />,
+      label: '工作流执行'
+    },
+    {
+      key: '/memory',
+      icon: <HistoryOutlined />,
+      label: '记忆管理'
     }
   ]
+
+  const selectedKey = menuItems.find(item => location.pathname === item.key)?.key || '/'
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -93,9 +105,10 @@ function App() {
         <Sider width={220} style={{ background: colorBgContainer }}>
           <Menu
             mode="inline"
-            defaultSelectedKeys={['/']}
+            selectedKeys={[selectedKey]}
             style={{ height: '100%', borderRight: 0 }}
             items={menuItems}
+            onClick={({ key }) => navigate(key)}
           />
         </Sider>
         <Layout style={{ padding: '0 24px 24px' }}>
@@ -114,9 +127,10 @@ function App() {
               <Route path="/roles" element={<RoleEditor />} />
               <Route path="/tasks" element={<TaskEditor />} />
               <Route path="/dataflows" element={<DataFlowEditor />} />
-              <Route path="/systems" element={<SystemEditor />} />
               <Route path="/knowledge" element={<KnowledgeBase />} />
               <Route path="/skills" element={<SkillCenter />} />
+              <Route path="/execution" element={<ExecutionResultPage />} />
+              <Route path="/memory" element={<MemoryManager />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Content>

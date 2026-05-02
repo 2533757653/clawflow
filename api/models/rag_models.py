@@ -77,6 +77,11 @@ class RAGResponse(BaseModel):
     processing_time_ms: float
 
 
+# ─── Agent System Models (reserved for future multi-agent workflow features) ───
+# These models are defined for future extension where the DataFlow/Execution
+# system can model complex multi-agent workflows with deciders, actors, and
+# feedback loops. They are not currently used by any router.
+
 class SystemRoleType(str, Enum):
     DECIDER = "decider"
     ACTOR = "actor"

@@ -32,7 +32,7 @@ export default function TaskEditor() {
   useEffect(() => {
     if (currentOrganizationId) {
       loadTasks(currentOrganizationId)
-      loadRoles(currentOrganizationId)
+      loadRoles()
     }
   }, [currentOrganizationId, loadTasks, loadRoles])
 
@@ -205,6 +205,9 @@ export default function TaskEditor() {
           </Form.Item>
           <Form.Item name="description" label="描述">
             <TextArea placeholder="请输入任务描述" rows={2} />
+          </Form.Item>
+          <Form.Item name="prompt" label="Prompt">
+            <TextArea placeholder="请输入任务执行的 prompt" rows={4} />
           </Form.Item>
           <Form.Item name="priority" label="优先级" initialValue="medium">
             <Select>

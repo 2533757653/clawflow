@@ -1,17 +1,24 @@
-from fastapi import APIRouter, HTTPException, status
-from fastapi.responses import FileResponse
-from typing import List, Optional
+import logging
 import os
 import json
 from datetime import datetime
+from fastapi import APIRouter, HTTPException, status
+from typing import List, Optional
+from pydantic import BaseModel
 
 from api.models import Skill
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 CLAWHUB_URL = "https://clawhub.example.com/api/v1"
 
 INSTALLED_SKILLS_PATH = "data/skills"
+
+
+class InstallToRoleRequest(BaseModel):
+    role_id: str
 
 
 def get_installed_skills_storage_path() -> str:
@@ -152,7 +159,7 @@ invocable: true
 
 
 @router.post("/{skill_id}/install", response_model=Skill)
-async def install_skill(skill_id: str):
+async def install_skill(skill_id: str, request: Optional[InstallToRoleRequest] = None):
     skills = load_installed_skills()
     skill = next((s for s in skills if s.id == skill_id), None)
 
@@ -192,8 +199,13 @@ invocable: true
         f.write(skill_md_content)
 
     skill.local_path = skill_path
-    save_installed_skills(skills)
 
+    if request and request.role_id:
+        if request.role_id not in skill.installed_roles:
+            skill.installed_roles.append(request.role_id)
+
+    save_installed_skills(skills)
+    logger.info(f"Installed skill: {skill.name} (id={skill_id})")
     return skill
 
 
@@ -211,3 +223,40 @@ async def uninstall_skill(skill_id: str):
 
     skills = [s for s in skills if s.id != skill_id]
     save_installed_skills(skills)
+    logger.info(f"Uninstalled skill: {skill.name} (id={skill_id})")
+
+
+@router.post("/{skill_id}/install/{role_id}", response_model=Skill)
+async def install_skill_to_role(skill_id: str, role_id: str):
+    skills = load_installed_skills()
+    skill = next((s for s in skills if s.id == skill_id), None)
+
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    if role_id not in skill.installed_roles:
+        skill.installed_roles.append(role_id)
+        save_installed_skills(skills)
+        logger.info(f"Assigned skill {skill.name} to role={role_id}")
+
+    return skill
+
+
+@router.delete("/{skill_id}/uninstall/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def uninstall_skill_from_role(skill_id: str, role_id: str):
+    skills = load_installed_skills()
+    skill = next((s for s in skills if s.id == skill_id), None)
+
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    if role_id in skill.installed_roles:
+        skill.installed_roles.remove(role_id)
+        save_installed_skills(skills)
+        logger.info(f"Removed skill {skill.name} from role={role_id}")
+
+
+@router.get("/role/{role_id}", response_model=List[Skill])
+async def get_role_skills(role_id: str):
+    skills = load_installed_skills()
+    return [s for s in skills if role_id in s.installed_roles]

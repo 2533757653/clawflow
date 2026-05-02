@@ -1,5 +1,5 @@
 import { Card, Row, Col, Statistic, Button, List, Tag, Space, message, Modal, Form, Input } from 'antd'
-import { PlusOutlined, RocketOutlined, TeamOutlined, PartitionOutlined, DeleteOutlined, EditOutlined, DeploymentUnitOutlined } from '@ant-design/icons'
+import { PlusOutlined, RocketOutlined, TeamOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, StopOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useStore } from '../stores'
 import type { Organization } from '../types'
@@ -14,6 +14,8 @@ export default function Dashboard() {
     createOrganization,
     deleteOrganization,
     deployOrganization,
+    startOrganization,
+    stopOrganization,
     loading
   } = useStore()
 
@@ -41,12 +43,33 @@ export default function Dashboard() {
     }
   }
 
-  const handleDeploy = async (id: string) => {
+  const handleDeploy = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     try {
       await deployOrganization(id)
       message.success('部署成功')
     } catch {
       message.error('部署失败')
+    }
+  }
+
+  const handleStart = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await startOrganization(id)
+      message.success('组织已开启')
+    } catch {
+      message.error('开启失败')
+    }
+  }
+
+  const handleStop = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await stopOrganization(id)
+      message.success('组织已停止')
+    } catch {
+      message.error('停止失败')
     }
   }
 
@@ -91,7 +114,7 @@ export default function Dashboard() {
             <Statistic
               title="已部署"
               value={organizations.filter(o => o.status === 'deployed' || o.status === 'running').length}
-              prefix={<DeploymentUnitOutlined />}
+              prefix={<CloudUploadOutlined />}
               valueStyle={{ color: '#52c41a' }}
             />
           </Card>
@@ -108,9 +131,10 @@ export default function Dashboard() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="角色总数"
-              value={currentOrg ? useStore.getState().roles.length : 0}
-              prefix={<PartitionOutlined />}
+              title="运行中"
+              value={organizations.filter(o => o.status === 'running').length}
+              prefix={<PlayCircleOutlined />}
+              valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
@@ -128,10 +152,15 @@ export default function Dashboard() {
               style={{ borderColor: currentOrganizationId === org.id ? '#1890ff' : undefined }}
               onClick={() => setCurrentOrganization(org.id)}
               actions={[
-                <DeploymentUnitOutlined key="deploy" onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeploy(org.id)
-                }} />,
+                org.status === 'draft' && (
+                  <CloudUploadOutlined key="deploy" onClick={(e) => handleDeploy(org.id, e)} />
+                ),
+                org.status === 'deployed' && (
+                  <PlayCircleOutlined key="start" onClick={(e) => handleStart(org.id, e)} />
+                ),
+                org.status === 'running' && (
+                  <StopOutlined key="stop" onClick={(e) => handleStop(org.id, e)} />
+                ),
                 <DeleteOutlined key="delete" onClick={(e) => {
                   e.stopPropagation()
                   Modal.confirm({
@@ -140,7 +169,7 @@ export default function Dashboard() {
                     onOk: () => handleDelete(org.id)
                   })
                 }} />
-              ]}
+              ].filter(Boolean)}
             >
               <Meta
                 avatar={<RocketOutlined style={{ fontSize: 32, color: '#1890ff' }} />}

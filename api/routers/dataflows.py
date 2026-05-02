@@ -1,7 +1,10 @@
+import logging
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 from api.models import DataFlow, DataFlowNode, DataFlowEdge
 from api.services import StorageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -20,7 +23,9 @@ async def list_dataflows(org_id: str):
 async def create_dataflow(org_id: str, dataflow: DataFlow):
     dataflow.organization_id = org_id
     storage = get_dataflow_storage(org_id)
-    return storage.save(dataflow)
+    saved = storage.save(dataflow)
+    logger.info(f"Created dataflow: {dataflow.name} (id={saved.id}) in org={org_id}")
+    return saved
 
 
 @router.get("/{org_id}/dataflows/{dataflow_id}", response_model=DataFlow)
@@ -40,7 +45,9 @@ async def update_dataflow(org_id: str, dataflow_id: str, dataflow: DataFlow):
         raise HTTPException(status_code=404, detail="DataFlow not found")
     dataflow.id = dataflow_id
     dataflow.organization_id = org_id
-    return storage.save(dataflow)
+    saved = storage.save(dataflow)
+    logger.info(f"Updated dataflow: {dataflow.name} (id={dataflow_id}) in org={org_id}")
+    return saved
 
 
 @router.delete("/{org_id}/dataflows/{dataflow_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -48,6 +55,7 @@ async def delete_dataflow(org_id: str, dataflow_id: str):
     storage = get_dataflow_storage(org_id)
     if not storage.delete(dataflow_id):
         raise HTTPException(status_code=404, detail="DataFlow not found")
+    logger.info(f"Deleted dataflow: id={dataflow_id} from org={org_id}")
 
 
 @router.post("/{org_id}/dataflows/{dataflow_id}/nodes", response_model=DataFlow)
@@ -57,7 +65,9 @@ async def add_node(org_id: str, dataflow_id: str, node: DataFlowNode):
     if not dataflow:
         raise HTTPException(status_code=404, detail="DataFlow not found")
     dataflow.nodes.append(node)
-    return storage.save(dataflow)
+    saved = storage.save(dataflow)
+    logger.info(f"Added node: {node.id} ({node.type}) to dataflow={dataflow_id} in org={org_id}")
+    return saved
 
 
 @router.delete("/{org_id}/dataflows/{dataflow_id}/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -69,6 +79,7 @@ async def remove_node(org_id: str, dataflow_id: str, node_id: str):
     dataflow.nodes = [n for n in dataflow.nodes if n.id != node_id]
     dataflow.edges = [e for e in dataflow.edges if e.source != node_id and e.target != node_id]
     storage.save(dataflow)
+    logger.info(f"Removed node: {node_id} from dataflow={dataflow_id} in org={org_id}")
 
 
 @router.post("/{org_id}/dataflows/{dataflow_id}/edges", response_model=DataFlow)
@@ -78,7 +89,9 @@ async def add_edge(org_id: str, dataflow_id: str, edge: DataFlowEdge):
     if not dataflow:
         raise HTTPException(status_code=404, detail="DataFlow not found")
     dataflow.edges.append(edge)
-    return storage.save(dataflow)
+    saved = storage.save(dataflow)
+    logger.info(f"Added edge: {edge.id} ({edge.source}→{edge.target}) to dataflow={dataflow_id}")
+    return saved
 
 
 @router.delete("/{org_id}/dataflows/{dataflow_id}/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -89,3 +102,4 @@ async def remove_edge(org_id: str, dataflow_id: str, edge_id: str):
         raise HTTPException(status_code=404, detail="DataFlow not found")
     dataflow.edges = [e for e in dataflow.edges if e.id != edge_id]
     storage.save(dataflow)
+    logger.info(f"Removed edge: {edge_id} from dataflow={dataflow_id}")

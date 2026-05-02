@@ -1,5 +1,5 @@
-import { Table, Button, Space, Tag, Input, message, Modal, Tabs } from 'antd'
-import { SearchOutlined, DownloadOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons'
+import { Table, Button, Space, Tag, Input, message, Modal, Tabs, Select, Popconfirm } from 'antd'
+import { SearchOutlined, EyeOutlined, UserAddOutlined } from '@ant-design/icons'
 import { useEffect, useState } from 'react'
 import { useStore } from '../stores'
 import type { Skill } from '../types'
@@ -9,10 +9,10 @@ export default function SkillCenter() {
   const {
     skills,
     clawhubSkills,
+    roles,
     loadSkills,
+    loadRoles,
     searchClawhubSkills,
-    installSkill,
-    uninstallSkill,
     loading
   } = useStore()
 
@@ -20,10 +20,14 @@ export default function SkillCenter() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewContent, setPreviewContent] = useState('')
   const [activeTab, setActiveTab] = useState('clawhub')
+  const [selectedRole, setSelectedRole] = useState<string | null>(null)
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false)
+  const [installingSkill, setInstallingSkill] = useState<Skill | null>(null)
 
   useEffect(() => {
     loadSkills()
-  }, [loadSkills])
+    loadRoles()
+  }, [loadSkills, loadRoles])
 
   const handleSearch = async () => {
     try {
@@ -33,19 +37,31 @@ export default function SkillCenter() {
     }
   }
 
-  const handleInstall = async (skillId: string) => {
+  const handleInstall = async (skillId: string, roleId?: string) => {
     try {
-      await installSkill(skillId)
-      message.success('技能安装成功')
+      if (roleId) {
+        await skillApi.installToRole(skillId, roleId)
+        message.success(`技能已安装到角色`)
+      }
+      setIsInstallModalOpen(false)
+      setInstallingSkill(null)
+      setSelectedRole(null)
+      loadSkills()
     } catch {
       message.error('安装失败')
     }
   }
 
-  const handleUninstall = async (skillId: string) => {
+  const openInstallModal = (skill: Skill) => {
+    setInstallingSkill(skill)
+    setIsInstallModalOpen(true)
+  }
+
+  const handleUninstallFromRole = async (skillId: string, roleId: string) => {
     try {
-      await uninstallSkill(skillId)
-      message.success('技能卸载成功')
+      await skillApi.uninstallSkillFromRole(skillId, roleId)
+      message.success('技能已从角色卸载')
+      loadSkills()
     } catch {
       message.error('卸载失败')
     }
@@ -116,25 +132,14 @@ export default function SkillCenter() {
           <Button size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.id)}>
             预览
           </Button>
-          {record.installed ? (
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleUninstall(record.id)}
-            >
-              卸载
-            </Button>
-          ) : (
-            <Button
-              size="small"
-              type="primary"
-              icon={<DownloadOutlined />}
-              onClick={() => handleInstall(record.id)}
-            >
-              安装
-            </Button>
-          )}
+          <Button
+            size="small"
+            type="primary"
+            icon={<UserAddOutlined />}
+            onClick={() => openInstallModal(record)}
+          >
+            安装到角色
+          </Button>
         </Space>
       )
     }
@@ -159,6 +164,25 @@ export default function SkillCenter() {
       ellipsis: true
     },
     {
+      title: '已安装到',
+      dataIndex: 'installed_roles',
+      key: 'installed_roles',
+      render: (roleIds: string[]) => (
+        <Space wrap>
+          {roleIds?.length > 0 ? (
+            roleIds.map(rid => {
+              const role = roles.find(r => r.id === rid)
+              return role ? (
+                <Tag key={rid} color="blue">{role.name}</Tag>
+              ) : null
+            })
+          ) : (
+            <Tag>全局安装</Tag>
+          )}
+        </Space>
+      )
+    },
+    {
       title: '安装时间',
       dataIndex: 'installed_at',
       key: 'installed_at',
@@ -168,18 +192,59 @@ export default function SkillCenter() {
       title: '操作',
       key: 'action',
       render: (_: unknown, record: Skill) => (
-        <Space>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.id)}>
-            预览
-          </Button>
-          <Button
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleUninstall(record.id)}
-          >
-            卸载
-          </Button>
+        <Space direction="vertical">
+          <Space>
+            <Button size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.id)}>
+              预览
+            </Button>
+            <Select
+              size="small"
+              placeholder="添加角色"
+              style={{ width: 120 }}
+              onChange={async (roleId) => {
+                try {
+                  await skillApi.installToRole(record.id, roleId)
+                  message.success('技能已添加到角色')
+                  loadSkills()
+                } catch {
+                  message.error('添加失败')
+                }
+              }}
+            >
+              {roles.map(role => (
+                <Select.Option
+                  key={role.id}
+                  value={role.id}
+                  disabled={record.installed_roles.includes(role.id)}
+                >
+                  {role.name}
+                </Select.Option>
+              ))}
+            </Select>
+          </Space>
+          {record.installed_roles.length > 0 && (
+            <Space wrap>
+              {record.installed_roles.map(rid => {
+                const role = roles.find(r => r.id === rid)
+                return role ? (
+                  <Popconfirm
+                    key={rid}
+                    title={`从 ${role.name} 卸载此技能?`}
+                    onConfirm={() => handleUninstallFromRole(record.id, rid)}
+                  >
+                    <Tag
+                      color="orange"
+                      style={{ cursor: 'pointer' }}
+                      closable
+                      onClose={(e) => e.preventDefault()}
+                    >
+                      {role.name}
+                    </Tag>
+                  </Popconfirm>
+                ) : null
+              })}
+            </Space>
+          )}
         </Space>
       )
     }
@@ -234,6 +299,46 @@ export default function SkillCenter() {
           }
         ]}
       />
+
+      <Modal
+        title="安装技能到角色"
+        open={isInstallModalOpen}
+        onCancel={() => {
+          setIsInstallModalOpen(false)
+          setInstallingSkill(null)
+          setSelectedRole(null)
+        }}
+        onOk={() => {
+          if (selectedRole && installingSkill) {
+            handleInstall(installingSkill.id, selectedRole)
+          }
+        }}
+        okText="安装"
+        okButtonProps={{ disabled: !selectedRole || !installingSkill }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>选择要安装技能的角色：</p>
+          <Select
+            placeholder="请选择角色"
+            style={{ width: '100%' }}
+            value={selectedRole}
+            onChange={setSelectedRole}
+          >
+            {roles.map(role => (
+              <Select.Option key={role.id} value={role.id}>
+                {role.name}
+              </Select.Option>
+            ))}
+          </Select>
+        </div>
+        {installingSkill && (
+          <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8 }}>
+            <p style={{ margin: 0 }}><strong>技能:</strong> {installingSkill.name}</p>
+            <p style={{ margin: '8px 0 0 0' }}><strong>版本:</strong> v{installingSkill.version}</p>
+            <p style={{ margin: '8px 0 0 0' }}><strong>描述:</strong> {installingSkill.description}</p>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         title="技能预览"

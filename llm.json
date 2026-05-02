@@ -1,0 +1,51 @@
+{
+  "provider": "volcano",
+  "volcano": {
+    "provider": "volcano",
+    "api_key": "5983addf-10a5-4f98-abbb-e0f72baa3454",
+    "base_url": "https://ark.cn-beijing.volces.com/api/coding",
+    "model": "doubao-seed-2-0-pro-260215"
+  },
+  "deepseek": {
+    "provider": "deepseek",
+    "api_key": "",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-chat"
+  },
+  "openai": {
+    "provider": "openai",
+    "api_key": "",
+    "base_url": "https://api.openai.com",
+    "model": "gpt-4"
+  },
+  "zhipu": {
+    "provider": "zhipu",
+    "api_key": "",
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "model": "glm-4"
+  },
+  "baidu": {
+    "provider": "baidu",
+    "api_key": "",
+    "base_url": "https://qianfan.baidubce.com/v2",
+    "model": "ernie-4.0-8k-latest"
+  },
+  "minimax": {
+    "provider": "minimax",
+    "api_key": "",
+    "base_url": "https://api.minimax.chat/v",
+    "model": "MiniMax-Text-01"
+  },
+  "tiwen": {
+    "provider": "tiwen",
+    "api_key": "",
+    "base_url": "https://tiwen.ai.bce.cn/api/v1",
+    "model": "wlkp-n2"
+  },
+  "ali": {
+    "provider": "ali",
+    "api_key": "",
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "model": "qwen-plus"
+  }
+}
